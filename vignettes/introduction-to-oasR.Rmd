@@ -1,0 +1,237 @@
+---
+title: "Introduction to oasR"
+author: "Ariel R. H."
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to oasR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Introduction
+
+The `oasR` package provides a comprehensive toolkit for option-adjusted spread (OAS) analysis of fixed income securities, with a focus on asset-backed securities (ABS) and mortgage-backed securities (MBS). This vignette demonstrates the basic workflow for performing OAS analysis using the package.
+
+## Installation
+
+You can install the development version of `oasR` from GitHub:
+
+```{r, eval=FALSE}
+# Install devtools if not already installed
+if (!requireNamespace("devtools", quietly = TRUE)) {
+  install.packages("devtools")
+}
+
+# Install oasR
+devtools::install_github("ambientpointcorp/oasR")
+```
+
+## Load Required Packages
+
+```{r setup}
+library(oasR)
+library(dnsr)  # For interest rate modeling
+library(ggplot2)  # For visualization enhancements
+```
+
+## Load Sample Data
+
+The package includes sample data for demonstration:
+
+```{r load-data}
+# Load sample asset data
+data(sample_abs_data)
+
+# Take a look at the data
+head(sample_abs_data)
+```
+
+## Simulate Interest Rate Paths
+
+First, we need to simulate interest rate paths using the `dnsr` package's DNS model capabilities:
+
+```{r simulate-rates, eval=FALSE}
+# In a real analysis, we would calibrate DNS parameters from market data
+# dns_params <- dnsr::get_calibrated_dns_params()
+
+# For this vignette, we'll create some sample parameters
+dns_params <- list(
+  params = list(
+    kappa = c(0.02, 0.3, 0.5),     # Mean-reversion speeds
+    theta = c(0.04, -0.02, 0.01),  # Long-run means
+    sigma = c(0.005, 0.01, 0.02),  # Volatilities
+    names = c("Level", "Slope", "Curvature"),
+    lambda = 0.0609
+  ),
+  initial_factors = c(0.035, -0.015, 0.005),
+  lambda = 0.0609
+)
+
+# Simulate 100 interest rate paths for 360 months (30 years)
+rate_paths <- simulate_rates(dns_params, n_paths = 100, n_periods = 360,
+                           maturities = c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30))
+```
+
+Let's visualize some of the simulated rate paths:
+
+```{r plot-rates, eval=FALSE}
+# Plot 10 random paths of the 10-year rate
+plot_rate_paths(rate_paths, maturity = "10", sample_size = 10)
+```
+
+And look at yield curves at different time points:
+
+```{r plot-curves, eval=FALSE}
+# Plot yield curves at different time points
+plot_yield_curves(rate_paths, time_points = c(0, 1, 5, 10, 20), path_idx = 1)
+```
+
+## Define a Prepayment Model
+
+Next, we need to define a prepayment model that specifies how loans prepay in response to various factors:
+
+```{r prepay-model}
+# Create a CPR/CDR prepayment model
+prepay_model <- prepayment_model(
+  type = "cpr_cdr",
+  base_cpr = 0.06,         # 6% CPR base rate
+  base_cdr = 0.01,         # 1% CDR base rate
+  recovery_rate = 0.65,    # 65% recovery on defaults
+  recovery_lag = 12,       # 12-month lag to recovery
+  seasoning = 1.0,         # Seasoning multiplier
+  burnout_factor = 0.3,    # Burnout factor
+  rate_sensitivity = 1.0   # Sensitivity to rate changes
+)
+
+# Alternative: Use a PSA model
+psa_model <- psa_prepayment_model(
+  psa_multiplier = 1.0,    # 100% PSA
+  base_cdr = 0.01,         # 1% CDR base rate
+  recovery_rate = 0.65     # 65% recovery on defaults
+)
+
+# Alternative: Use a survival model
+survival_model <- survival_prepayment_model(
+  prepay_hazard = 0.005,   # 0.5% monthly prepayment hazard
+  default_hazard = 0.001,  # 0.1% monthly default hazard
+  recovery_rate = 0.65     # 65% recovery on defaults
+)
+```
+
+## Calculate OAS
+
+Now we can perform the OAS calculation:
+
+```{r calculate-oas, eval=FALSE}
+# Calculate OAS with a target market price of 101.5
+oas_result <- calculate_oas(
+  asset_data = sample_abs_data,
+  rate_paths = rate_paths,
+  prepay_model = prepay_model,
+  market_price = 101.5,
+  max_iterations = 50,
+  verbose = TRUE
+)
+
+# Print the OAS result
+print(oas_result)
+
+# Get a more detailed summary
+summary(oas_result)
+```
+
+## Visualize OAS Results
+
+The package provides various visualization functions:
+
+```{r visualize, eval=FALSE}
+# Plot cash flows
+plot(oas_result, type = "cashflows")
+
+# Plot prepayment rates
+plot(oas_result, type = "prepayments")
+
+# Plot rate paths
+plot(oas_result, type = "rates")
+
+# Plot all three
+plots <- plot(oas_result, type = "all")
+plots$cashflows
+plots$prepayments
+plots$rates
+```
+
+## Sensitivity Analysis
+
+We can analyze how OAS is affected by changes in interest rates and prepayment speeds:
+
+```{r sensitivity, eval=FALSE}
+# Run sensitivity analysis
+sensitivity <- run_oas_sensitivity(
+  oas_result,
+  sensitivity_type = "both",
+  rate_shifts = c(-200, -100, -50, 0, 50, 100, 200),
+  prepay_multipliers = c(0.5, 0.75, 1.0, 1.25, 1.5, 2.0)
+)
+
+# Print sensitivity results
+print(sensitivity)
+
+# Plot sensitivity analysis results
+sensitivity_plots <- plot(sensitivity)
+sensitivity_plots$oas_rate
+sensitivity_plots$wal_rate
+sensitivity_plots$oas_prepay
+sensitivity_plots$wal_prepay
+```
+
+For more advanced analysis, we can create a 2D surface of OAS sensitivity:
+
+```{r surface, eval=FALSE}
+# Create OAS surface
+surface <- create_oas_surface(
+  oas_result,
+  rate_shifts = seq(-200, 200, by = 50),
+  prepay_multipliers = seq(0.5, 2.0, by = 0.25)
+)
+
+# Plot OAS surface
+plot(surface, type = "oas")
+```
+
+## Structured Securities (ABS/MBS)
+
+The package also supports analysis of structured securities:
+
+```{r structured, eval=FALSE}
+# Load sample deal structure
+data(sample_deal_structure)
+
+# Calculate OAS for structured security
+structured_oas <- calculate_oas(
+  asset_data = sample_abs_data,
+  rate_paths = rate_paths,
+  prepay_model = prepay_model,
+  market_price = 101.0,
+  deal_structure = sample_deal_structure
+)
+
+# Print results
+print(structured_oas)
+```
+
+## Conclusion
+
+This vignette has demonstrated the basic functionality of the `oasR` package for option-adjusted spread analysis. The package provides a flexible and comprehensive toolkit for analyzing fixed income securities with embedded options, with a focus on asset-backed and mortgage-backed securities.
+
+For more advanced usage and additional features, please refer to the package documentation and other vignettes.

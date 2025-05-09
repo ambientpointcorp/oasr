@@ -1,0 +1,34 @@
+Package: oasR
+Title: Option-Adjusted Spread Analysis for Fixed Income Securities
+Version: 0.1.0
+Authors@R: 
+    person("Ariel", "R. H.", email = "ariel@ambientpointcorp.com", role = c("aut", "cre"))
+Description: A comprehensive toolkit for option-adjusted spread (OAS) analysis 
+    of fixed income securities with embedded options. Provides functions for 
+    modeling prepayments, defaults, and interest rates to calculate accurate 
+    option-adjusted spreads. Supports various prepayment and default models, 
+    including CPR (Conditional Prepayment Rate), CDR (Conditional Default Rate), 
+    and time-to-event survival models. Leverages the 'dnsr' package for interest 
+    rate modeling and yield curve simulation.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports: 
+    dnsr,
+    ggplot2,
+    reshape2,
+    dplyr,
+    stats,
+    parallel,
+    methods,
+    utils,
+    checkmate
+Suggests: 
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+Config/testthat/edition: 3
+Depends: 
+    R (>= 2.10)
+LazyData: true

@@ -1,0 +1,51 @@
+# oasR Package Structure
+
+```
+oasR/
+├── DESCRIPTION
+├── NAMESPACE
+├── R/
+│   ├── oasR-package.R
+│   ├── rate-modeling.R
+│   ├── prepayment-models.R
+│   ├── cashflow-projection.R
+│   ├── present-value.R
+│   ├── oas-calculation.R
+│   ├── sensitivity-analysis.R
+│   ├── visualization.R
+│   └── data.R
+├── man/
+│   └── ... (documentation files)
+├── data/
+│   └── sample_abs_data.rda
+├── vignettes/
+│   └── introduction-to-oasR.Rmd
+├── tests/
+│   ├── testthat/
+│   │   ├── test-rate-modeling.R
+│   │   ├── test-prepayment-models.R
+│   │   ├── test-cashflow-projection.R
+│   │   ├── test-present-value.R
+│   │   ├── test-oas-calculation.R
+│   │   ├── test-sensitivity-analysis.R
+│   │   ├── test-visualization.R
+│   │   └── test-package.R
+│   └── testthat.R
+```
+
+## File Descriptions
+
+1. **DESCRIPTION**: Package metadata, dependencies
+2. **NAMESPACE**: Exports and imports
+3. **R/oasR-package.R**: Package documentation and metadata
+4. **R/rate-modeling.R**: Interface with dnsr package for interest rate modeling
+5. **R/prepayment-models.R**: Prepayment and default models with different approaches
+6. **R/cashflow-projection.R**: Cash flow projection for ABS/MBS securities
+7. **R/present-value.R**: Present value calculation functions
+8. **R/oas-calculation.R**: Core OAS calculation algorithm
+9. **R/sensitivity-analysis.R**: Functions for OAS sensitivity analysis
+10. **R/visualization.R**: Plotting functions for OAS analysis results
+11. **R/data.R**: Documentation for included datasets
+12. **data/sample_abs_data.rda**: Sample data for examples
+13. **vignettes/introduction-to-oasR.Rmd**: Introduction to oasR
+14. **tests/testthat/**: Unit tests

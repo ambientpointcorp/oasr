@@ -1,0 +1,69 @@
+# oasR: Option-Adjusted Spread Analysis in R
+
+## Package Overview
+
+`oasR` is a comprehensive R package for performing option-adjusted spread (OAS) analysis on fixed income securities, particularly focusing on asset-backed securities (ABS) and mortgage-backed securities (MBS). The package leverages the `dnsr` package for interest rate modeling and yield curve simulation.
+
+## Key Features
+
+- **Flexible OAS Analysis**: Calculate option-adjusted spreads for fixed income securities with embedded options
+- **Multiple Prepayment Models**: Support for CPR, CDR, and time-to-event survival models
+- **Default Modeling**: Incorporate credit risk with default rates and loss recovery assumptions
+- **Cash Flow Projection**: Project cash flows under various interest rate scenarios
+- **Sensitivity Analysis**: Analyze OAS sensitivity to changes in market factors
+- **Visualization**: Specialized plotting functions for OAS analysis results
+
+## Dependencies
+
+- **dnsr**: For interest rate modeling and yield curve simulation
+- **ggplot2**: For visualization
+- **data.table**: For efficient data manipulation
+- **stats**: For statistical functions
+- **parallel**: For parallel computing to speed up simulations
+
+## Installation
+
+```r
+# Install from GitHub
+# devtools::install_github("ambientpointcorp/oasR")
+```
+
+## Basic Usage
+
+```r
+library(oasR)
+library(dnsr)
+
+# Load sample data or create your own asset data
+data(sample_abs_data)
+
+# Calibrate DNS model from market data
+dns_params <- dnsr::get_calibrated_dns_params()
+
+# Simulate interest rate paths
+rate_paths <- simulate_rates(dns_params, n_paths = 100, n_periods = 360)
+
+# Define prepayment assumptions
+prepay_model <- prepayment_model(
+  type = "cpr_cdr",
+  base_cpr = 0.06,
+  base_cdr = 0.01,
+  recovery_rate = 0.65
+)
+
+# Calculate OAS
+oas_result <- calculate_oas(
+  asset_data = sample_abs_data,
+  rate_paths = rate_paths,
+  prepay_model = prepay_model,
+  market_price = 101.5
+)
+
+# Analyze results
+summary(oas_result)
+plot(oas_result)
+```
+
+## License
+
+This package is licensed under the MIT License.
