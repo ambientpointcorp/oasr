@@ -1,6 +1,6 @@
-# Unit Test Summary for oasR Package
+# Unit Test Summary for oasr Package
 
-I've created a comprehensive set of unit tests for the oasR package using the testthat framework. These tests cover the main functionality of the package and will help ensure that everything works as expected during development and maintenance.
+I've created a comprehensive set of unit tests for the oasr package using the testthat framework. These tests cover the main functionality of the package and will help ensure that everything works as expected during development and maintenance.
 
 ## Test Files Structure
 
@@ -64,4 +64,4 @@ devtools::test(filter = "rate-modeling")
 3. **Stress Testing**: Test the package with large datasets and extreme parameter values
 4. **Cross-Version Testing**: Test with different versions of R and dependent packages
 
-These tests provide a solid foundation for ensuring the reliability and correctness of the oasR package.
+These tests provide a solid foundation for ensuring the reliability and correctness of the oasr package.

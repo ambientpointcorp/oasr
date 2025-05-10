@@ -1,8 +1,8 @@
-# oasR: Option-Adjusted Spread Analysis in R
+# oasr: Option-Adjusted Spread Analysis in R
 
 ## Overview
 
-`oasR` is a comprehensive R package for performing option-adjusted spread (OAS) analysis on fixed income securities, particularly focusing on asset-backed securities (ABS) and mortgage-backed securities (MBS). The package leverages the `dnsr` package for interest rate modeling and yield curve simulation.
+`oasr` is a comprehensive R package for performing option-adjusted spread (OAS) analysis on fixed income securities, particularly focusing on asset-backed securities (ABS) and mortgage-backed securities (MBS). The package leverages the `dnsr` package for interest rate modeling and yield curve simulation.
 
 ## Features
 
@@ -17,7 +17,7 @@
 
 ```r
 # Install development version from GitHub
-devtools::install_github("ambientpointcorp/oasR")
+devtools::install_github("ambientpointcorp/oasr")
 ```
 
 ## Usage
@@ -25,7 +25,7 @@ devtools::install_github("ambientpointcorp/oasR")
 ### Basic Example
 
 ```r
-library(oasR)
+library(oasr)
 library(dnsr)
 
 # Load sample data
@@ -69,7 +69,7 @@ plot(sensitivity)
 ### Structured Securities Example
 
 ```r
-library(oasR)
+library(oasr)
 library(dnsr)
 
 # Load sample data
@@ -115,7 +115,7 @@ The package supports multiple prepayment model types:
 The package relies on the `dnsr` package for interest rate modeling:
 
 ```r
-library(oasR)
+library(oasr)
 library(dnsr)
 
 # Get Treasury yield data
@@ -130,7 +130,7 @@ dynamics <- dnsr::estimate_dns_dynamics(dns_result$parameters)
 # Convert to simulation parameters
 sim_params <- dnsr::dns_dynamics_to_sim_params(dynamics)
 
-# Simulate rate paths using oasR interface
+# Simulate rate paths using oasr interface
 rate_paths <- simulate_rates(sim_params, n_paths = 100)
 ```
 

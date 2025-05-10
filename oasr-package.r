@@ -14,7 +14,7 @@
 #' }
 #'
 #' @docType package
-#' @name oasR-package
+#' @name oasr-package
 "_PACKAGE"
 
 # Ensure necessary packages are imported

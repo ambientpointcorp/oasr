@@ -1,4 +1,4 @@
 library(testthat)
-library(oasR)
+library(oasr)
 
-test_check("oasR")
+test_check("oasr")

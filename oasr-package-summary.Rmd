@@ -1,8 +1,8 @@
-# oasR: Option-Adjusted Spread Analysis in R
+# oasr: Option-Adjusted Spread Analysis in R
 
 ## Package Overview
 
-`oasR` is a comprehensive R package for performing option-adjusted spread (OAS) analysis on fixed income securities, particularly focusing on asset-backed securities (ABS) and mortgage-backed securities (MBS). The package leverages the `dnsr` package for interest rate modeling and yield curve simulation.
+`oasr` is a comprehensive R package for performing option-adjusted spread (OAS) analysis on fixed income securities, particularly focusing on asset-backed securities (ABS) and mortgage-backed securities (MBS). The package leverages the `dnsr` package for interest rate modeling and yield curve simulation.
 
 ## Key Features
 
@@ -25,13 +25,13 @@
 
 ```r
 # Install from GitHub
-# devtools::install_github("ambientpointcorp/oasR")
+# devtools::install_github("ambientpointcorp/oasr")
 ```
 
 ## Basic Usage
 
 ```r
-library(oasR)
+library(oasr)
 library(dnsr)
 
 # Load sample data or create your own asset data

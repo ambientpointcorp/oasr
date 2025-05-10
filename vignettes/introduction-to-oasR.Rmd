@@ -1,10 +1,10 @@
 ---
-title: "Introduction to oasR"
+title: "Introduction to oasr"
 author: "Ariel R. H."
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Introduction to oasR}
+  %\VignetteIndexEntry{Introduction to oasr}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -20,11 +20,11 @@ knitr::opts_chunk$set(
 
 ## Introduction
 
-The `oasR` package provides a comprehensive toolkit for option-adjusted spread (OAS) analysis of fixed income securities, with a focus on asset-backed securities (ABS) and mortgage-backed securities (MBS). This vignette demonstrates the basic workflow for performing OAS analysis using the package.
+The `oasr` package provides a comprehensive toolkit for option-adjusted spread (OAS) analysis of fixed income securities, with a focus on asset-backed securities (ABS) and mortgage-backed securities (MBS). This vignette demonstrates the basic workflow for performing OAS analysis using the package.
 
 ## Installation
 
-You can install the development version of `oasR` from GitHub:
+You can install the development version of `oasr` from GitHub:
 
 ```{r, eval=FALSE}
 # Install devtools if not already installed
@@ -32,14 +32,14 @@ if (!requireNamespace("devtools", quietly = TRUE)) {
   install.packages("devtools")
 }
 
-# Install oasR
-devtools::install_github("ambientpointcorp/oasR")
+# Install oasr
+devtools::install_github("ambientpointcorp/oasr")
 ```
 
 ## Load Required Packages
 
 ```{r setup}
-library(oasR)
+library(oasr)
 library(dnsr)  # For interest rate modeling
 library(ggplot2)  # For visualization enhancements
 ```
@@ -232,6 +232,6 @@ print(structured_oas)
 
 ## Conclusion
 
-This vignette has demonstrated the basic functionality of the `oasR` package for option-adjusted spread analysis. The package provides a flexible and comprehensive toolkit for analyzing fixed income securities with embedded options, with a focus on asset-backed and mortgage-backed securities.
+This vignette has demonstrated the basic functionality of the `oasr` package for option-adjusted spread analysis. The package provides a flexible and comprehensive toolkit for analyzing fixed income securities with embedded options, with a focus on asset-backed and mortgage-backed securities.
 
 For more advanced usage and additional features, please refer to the package documentation and other vignettes.

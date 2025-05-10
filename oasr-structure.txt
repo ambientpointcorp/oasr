@@ -1,11 +1,11 @@
-# oasR Package Structure
+# oasr Package Structure
 
 ```
-oasR/
+oasr/
 ├── DESCRIPTION
 ├── NAMESPACE
 ├── R/
-│   ├── oasR-package.R
+│   ├── oasr-package.R
 │   ├── rate-modeling.R
 │   ├── prepayment-models.R
 │   ├── cashflow-projection.R
@@ -19,7 +19,7 @@ oasR/
 ├── data/
 │   └── sample_abs_data.rda
 ├── vignettes/
-│   └── introduction-to-oasR.Rmd
+│   └── introduction-to-oasr.Rmd
 ├── tests/
 │   ├── testthat/
 │   │   ├── test-rate-modeling.R
@@ -37,7 +37,7 @@ oasR/
 
 1. **DESCRIPTION**: Package metadata, dependencies
 2. **NAMESPACE**: Exports and imports
-3. **R/oasR-package.R**: Package documentation and metadata
+3. **R/oasr-package.R**: Package documentation and metadata
 4. **R/rate-modeling.R**: Interface with dnsr package for interest rate modeling
 5. **R/prepayment-models.R**: Prepayment and default models with different approaches
 6. **R/cashflow-projection.R**: Cash flow projection for ABS/MBS securities
@@ -47,5 +47,5 @@ oasR/
 10. **R/visualization.R**: Plotting functions for OAS analysis results
 11. **R/data.R**: Documentation for included datasets
 12. **data/sample_abs_data.rda**: Sample data for examples
-13. **vignettes/introduction-to-oasR.Rmd**: Introduction to oasR
+13. **vignettes/introduction-to-oasr.Rmd**: Introduction to oasr
 14. **tests/testthat/**: Unit tests
