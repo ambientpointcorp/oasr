@@ -9,7 +9,7 @@ survival_prepayment_model(
   default_hazard = 0.001,
   recovery_rate = 0.65,
   recovery_lag = 12,
-  seasoning = 0.3
+  seasoning = 0
 )
 }
 \arguments{

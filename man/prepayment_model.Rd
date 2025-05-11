@@ -10,12 +10,11 @@ prepayment_model(
   base_cdr = 0.01,
   recovery_rate = 0.65,
   recovery_lag = 12,
-  seasoning = 1,
+  seasoning = 0,
   custom_fn = NULL,
-  burnout_factor = 0.3,
-  rate_sensitivity = 1,
-  seasonal_factors = c(0.94, 0.96, 0.98, 1.02, 1.05, 1.06, 1.04, 1.03, 1.02, 0.98, 0.97,
-    0.95),
+  burnout_factor = 0,
+  rate_sensitivity = 0,
+  seasonal_factors = c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
   ...
 )
 }

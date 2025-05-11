@@ -27,10 +27,10 @@ my_custom_fn <- function(asset, reference_rates, n_paths, n_periods) {
   prepay_rates <- array(0, dim = c(n_paths, n_periods))
   default_rates <- array(0, dim = c(n_paths, n_periods))
   recovery_rates <- array(0, dim = c(n_paths, n_periods))
-  
+
   # Fill arrays with custom logic
   # ...
-  
+
   return(list(
     prepay_rates = prepay_rates,
     default_rates = default_rates,
