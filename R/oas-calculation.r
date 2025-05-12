@@ -97,7 +97,7 @@ calculate_oas <- function(asset_data, rate_paths, prepay_model, market_price,
         rate_paths = rate_paths,
         oas = oas,
         asset_level = TRUE,
-        total_idx = 8  # Total cash flow index for asset-level cashflows
+        total_idx = 9  # Total cash flow index for asset-level cashflows
       )
 
       # Calculate weighted average price

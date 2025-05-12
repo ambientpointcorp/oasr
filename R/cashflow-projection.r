@@ -14,7 +14,8 @@
 #'   \item{5}{Loss}
 #'   \item{6}{Recovery}
 #'   \item{7}{Interest}
-#'   \item{8}{Total payment}
+#'   \item{8}{Servicing}
+#'   \item{9}{Total payment}
 #'
 #' @export
 project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL) {
@@ -51,8 +52,8 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL) {
     # Initialize cashflow array for this path
     # Dimensions: [time, component, asset]
     # Components: [1] remaining_balance, [2] scheduled_principal, [3] prepayment,
-    #             [4] default, [5] loss, [6] recovery, [7] interest, [8] total
-    cf_array <- array(0, dim = c(n_periods, 8, n_assets))
+    #             [4] default, [5] loss, [6] recovery, [7] interest, [8] servicing, [9] total
+    cf_array <- array(0, dim = c(n_periods, 9, n_assets))
 
     # Process each asset
     for (a in 1:n_assets) {
@@ -60,11 +61,12 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL) {
       asset <- asset_data[a, ]
 
       # Extract required loan characteristics
-      if (!all(c("balance", "wac", "wam") %in% names(asset))) {
-        stop("asset_data must include columns: balance, wac, wam")
+      if (!all(c("balance", "servicing", "wac", "wam") %in% names(asset))) {
+        stop("asset_data must include columns: balance, servicing, wac, wam")
       }
 
       original_balance <- asset$balance
+      servicing <- asset$servicing
       wac <- asset$wac
       wam <- asset$wam
 
@@ -73,6 +75,9 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL) {
 
       # Calculate remaining term
       remaining_term <- wam - age
+
+      # Calculate monthly servicing rate
+      servicing_rate <- servicing / 12
 
       # Calculate monthly interest rate
       monthly_rate <- wac / 12
@@ -100,6 +105,9 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL) {
         # Get prepayment and default rates for this path, time, asset
         smm <- prepay_rates[i, t, a]
         mdr <- default_rates[i, t, a]
+
+        # Calculate scheduled interest
+        servicing_fees <- remaining_balance * servicing_rate
 
         # Calculate scheduled interest
         interest_payment <- remaining_balance * monthly_rate
@@ -133,7 +141,8 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL) {
         cf_array[t, 5, a] <- loss_amount                   # Loss
         cf_array[t, 6, a] <- recovery_amount               # Recovery
         cf_array[t, 7, a] <- interest_payment              # Interest
-        cf_array[t, 8, a] <- principal_payment + prepayment + interest_payment + recovery_amount  # Total payment
+        cf_array[t, 8, a] <- servicing_fees                # Servicing
+        cf_array[t, 9, a] <- principal_payment + prepayment + interest_payment - servicing_fees + recovery_amount  # Total payment
 
         # Update for next period
         remaining_balance <- new_balance
@@ -233,7 +242,7 @@ aggregate_cashflows <- function(cashflows, asset_data, deal_structure, verbose =
 
       # Sum across all loans
       total_principal <- sum(loan_cf[2, ]) + sum(loan_cf[3, ])  # Scheduled + prepayments
-      total_interest <- sum(loan_cf[7, ])
+      total_interest <- sum(loan_cf[7, ]) - sum(loan_cf[8, ])  # Interest - servicing
       total_losses <- sum(loan_cf[5, ]) - sum(loan_cf[6, ])  # Losses - recoveries
 
       # Allocate principal based on waterfall rule

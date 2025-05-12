@@ -23,7 +23,8 @@ where component is:
 \item{5}{Loss}
 \item{6}{Recovery}
 \item{7}{Interest}
-\item{8}{Total payment}
+\item{8}{Servicing}
+\item{9}{Total payment}
 }
 \description{
 Projects cash flows for asset-backed securities based on prepayment and default rates.

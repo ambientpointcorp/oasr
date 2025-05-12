@@ -10,7 +10,7 @@ calculate_present_value(
   oas,
   reference_key = "10",
   asset_level = TRUE,
-  total_idx = 8
+  total_idx = 9
 )
 }
 \arguments{
