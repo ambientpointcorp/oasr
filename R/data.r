@@ -8,6 +8,7 @@
 #'   \item{asset_id}{Asset identifier}
 #'   \item{balance}{Current balance of the asset (in dollars)}
 #'   \item{wac}{Weighted average coupon rate (annual, in decimal)}
+#'   \item{servicing}{Servicing fee (annual, in decimal)}
 #'   \item{wam}{Weighted average maturity (in months)}
 #'   \item{age}{Current age of the asset (in months)}
 #'   \item{ltv}{Loan-to-value ratio (in decimal)}
@@ -34,6 +35,7 @@ create_sample_abs_data <- function() {
     asset_id = c("A001", "A002", "A003", "A004", "A005"),
     balance = c(200000, 150000, 300000, 250000, 180000),
     wac = c(0.055, 0.048, 0.062, 0.053, 0.047),
+    servicing = c(0.005, 0.004, 0.006, 0.005, 0.004),
     wam = c(300, 280, 320, 260, 240),
     age = c(60, 40, 20, 100, 120),
     ltv = c(0.75, 0.68, 0.82, 0.72, 0.65),
