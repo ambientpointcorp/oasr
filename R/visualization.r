@@ -679,7 +679,7 @@ generate_report_content <- function(oas_result, title, author) {
   # Create setup chunk
   setup_chunk <- paste0("```{r setup, include=FALSE}\n",
                         "knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)\n",
-                        "library(oasR)\n",
+                        "library(oasr)\n",
                         "library(ggplot2)\n",
                         "library(knitr)\n",
                         "library(dplyr)\n",
