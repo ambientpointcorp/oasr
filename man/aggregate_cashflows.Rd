@@ -4,7 +4,13 @@
 \alias{aggregate_cashflows}
 \title{Aggregate Cash Flows by Deal Structure}
 \usage{
-aggregate_cashflows(cashflows, asset_data, deal_structure, verbose = FALSE)
+aggregate_cashflows(
+  cashflows,
+  asset_data,
+  deal_structure,
+  verbose = FALSE,
+  reference_rates = NULL
+)
 }
 \arguments{
 \item{cashflows}{List. The result from \code{\link{project_cashflows}}}
@@ -14,6 +20,10 @@ aggregate_cashflows(cashflows, asset_data, deal_structure, verbose = FALSE)
 \item{deal_structure}{List. Deal structure specification with waterfall rules}
 
 \item{verbose}{Logical. Whether to print verbose output}
+
+\item{reference_rates}{Matrix. Optional reference rate matrix with dimensions \link{n_paths, n_periods}
+for variable rate bonds, typically from \code{\link{extract_reference_rates}}.
+If NULL, fixed rates are used.}
 }
 \value{
 A list of bond-level cash flow arrays for each path
@@ -29,7 +39,10 @@ deal_structure <- list(
   bonds = data.frame(
     bond_id = c("A", "B"),
     balance = c(800000, 200000),
-    coupon = c(0.04, 0.06)
+    coupon = c(0.04, 0.06),
+    is_floating = c(TRUE, FALSE),
+    spread = c(0.015, 0),     # 150bps spread for floating rate bond
+    reset_frequency = c(1, 0) # Monthly reset for floating rate bond
   ),
   waterfall = list(
     principal = "sequential",   # sequential or pro_rata
@@ -38,7 +51,13 @@ deal_structure <- list(
   )
 )
 
-bond_cashflows <- aggregate_cashflows(cashflows, asset_data, deal_structure)
+# Use reference_rates extracted from simulated interest rates
+dns_params <- dnsr::get_calibrated_dns_params()
+rate_paths <- simulate_rates(dns_params, n_paths = 1, n_periods = 120)
+reference_rates <- extract_reference_rates(rate_paths, "1")  # 1-year rate index
+
+bond_cashflows <- aggregate_cashflows(cashflows, asset_data, deal_structure, 
+                                      reference_rates = reference_rates)
 }
 
 }

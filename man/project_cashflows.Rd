@@ -4,7 +4,12 @@
 \alias{project_cashflows}
 \title{Project Cash Flows for ABS/MBS Securities}
 \usage{
-project_cashflows(asset_data, credit_vectors, n_periods = NULL)
+project_cashflows(
+  asset_data,
+  credit_vectors,
+  n_periods = NULL,
+  reference_rates = NULL
+)
 }
 \arguments{
 \item{asset_data}{Data frame. Asset data with loan characteristics}
@@ -12,6 +17,10 @@ project_cashflows(asset_data, credit_vectors, n_periods = NULL)
 \item{credit_vectors}{List. The result from \code{\link{calculate_credit_vectors}}}
 
 \item{n_periods}{Integer. Number of periods to project}
+
+\item{reference_rates}{Matrix. Optional reference rate matrix with dimensions \link{n_paths, n_periods}
+for variable rate loans, typically from \code{\link{extract_reference_rates}}.
+If NULL, fixed rates are used.}
 }
 \value{
 A list of cash flow arrays for each path, with dimensions \link{time, component, asset}

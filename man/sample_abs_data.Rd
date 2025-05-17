@@ -10,6 +10,7 @@ A data frame with 5 rows and 7 variables:
 \item{asset_id}{Asset identifier}
 \item{balance}{Current balance of the asset (in dollars)}
 \item{wac}{Weighted average coupon rate (annual, in decimal)}
+\item{servicing}{Servicing fee (annual, in decimal)}
 \item{wam}{Weighted average maturity (in months)}
 \item{age}{Current age of the asset (in months)}
 \item{ltv}{Loan-to-value ratio (in decimal)}
