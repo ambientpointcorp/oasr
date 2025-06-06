@@ -5,7 +5,7 @@
 #' @param credit_vectors List. The result from \code{\link{calculate_credit_vectors}}
 #' @param n_periods Integer. Number of periods to project
 #' @param reference_rates Matrix. Optional reference rate matrix with dimensions [n_paths, n_periods]
-#'        for variable rate loans, typically from \code{\link{extract_reference_rates}}. 
+#'        for variable rate loans, typically from \code{\link{extract_reference_rates}}.
 #'        If NULL, fixed rates are used.
 #'
 #' @return A list of cash flow arrays for each path, with dimensions [time, component, asset]
@@ -26,9 +26,9 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
   # Parameter validation
   checkmate::assert_data_frame(asset_data)
   checkmate::assert_list(credit_vectors)
-  
+
   # Check for reference_rates - optional for backward compatibility
-  has_reference_rates <- !is.null(reference_rates) 
+  has_reference_rates <- !is.null(reference_rates)
   if (has_reference_rates) {
     checkmate::assert_matrix(reference_rates)
   }
@@ -46,7 +46,7 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
     n_periods <- min(n_periods, dim(prepay_rates)[2])
   }
   n_assets <- dim(prepay_rates)[3]
-  
+
   # Validate reference_rates dimensions if provided
   if (has_reference_rates) {
     if (nrow(reference_rates) != n_paths || ncol(reference_rates) < n_periods) {
@@ -77,49 +77,49 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
       asset <- asset_data[a, ]
 
       # Extract required loan characteristics
-      if (!all(c("balance", "servicing", "wac", "wam") %in% names(asset))) {
-        stop("asset_data must include columns: balance, servicing, wac, wam")
+      if (!all(c("balance", "servicing", "wac", "term") %in% names(asset))) {
+        stop("asset_data must include columns: balance, servicing, wac, term")
       }
 
       original_balance <- asset$balance
       servicing <- asset$servicing
       wac <- asset$wac
-      wam <- asset$wam
+      term <- asset$term
 
       # Extract optional loan characteristics
       age <- if ("age" %in% names(asset)) asset$age else 0
-      
+
       # Extract variable rate characteristics if available
       is_variable_rate <- FALSE
       rate_margin <- 0
       reset_frequency <- 0
       next_reset <- 0
-      
+
       if (all(c("is_variable_rate", "rate_margin") %in% names(asset))) {
         is_variable_rate <- isTRUE(asset$is_variable_rate)
         rate_margin <- if (is_variable_rate) asset$rate_margin else 0
-        
+
         # Optional reset parameters
-        reset_frequency <- if ("reset_frequency" %in% names(asset) && is_variable_rate) 
+        reset_frequency <- if ("reset_frequency" %in% names(asset) && is_variable_rate)
                               asset$reset_frequency else 12  # Default to annual reset
-        next_reset <- if ("next_reset" %in% names(asset) && is_variable_rate) 
+        next_reset <- if ("next_reset" %in% names(asset) && is_variable_rate)
                         asset$next_reset else 0  # Default to immediate reset
       }
-      
+
       # Variable rate requires reference_rates
       if (is_variable_rate && !has_reference_rates) {
         stop("Variable rate loans require reference_rates parameter")
       }
 
       # Calculate remaining term
-      remaining_term <- wam - age
+      remaining_term <- term - age
 
       # Calculate monthly servicing rate
       servicing_rate <- servicing / 12
 
       # Calculate initial monthly interest rate
       monthly_rate <- wac / 12
-      
+
       # For variable rate loans, calculate payment based on fully-indexed rate at origination
       # But store current monthly rate for interest calculations
       payment_monthly_rate <- monthly_rate
@@ -136,7 +136,7 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
 
       # Set initial balance
       remaining_balance <- original_balance
-      
+
       # Track months until next reset
       months_to_reset <- next_reset
 
@@ -146,14 +146,14 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
         if (remaining_balance <= 0.01) {
           break
         }
-        
+
         # Handle rate reset for variable rate loans
         if (is_variable_rate) {
           if (months_to_reset <= 0) {
             # Reset the rate based on index value + margin
             index_rate <- reference_rates[i, t] / 12  # Convert annual to monthly
             monthly_rate <- index_rate + (rate_margin / 12)
-            
+
             # Reset countdown to next reset
             months_to_reset <- reset_frequency
           } else {
@@ -173,7 +173,7 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
 
         # Calculate scheduled principal (payment amount is fixed)
         principal_payment <- min(remaining_balance, scheduled_payment - interest_payment)
-        
+
         # Handle edge case where interest exceeds scheduled payment (negative amortization)
         if (principal_payment < 0) {
           principal_payment <- 0
@@ -257,8 +257,8 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
 #' dns_params <- dnsr::get_calibrated_dns_params()
 #' rate_paths <- simulate_rates(dns_params, n_paths = 1, n_periods = 120)
 #' reference_rates <- extract_reference_rates(rate_paths, "1")  # 1-year rate index
-#' 
-#' bond_cashflows <- aggregate_cashflows(cashflows, asset_data, deal_structure, 
+#'
+#' bond_cashflows <- aggregate_cashflows(cashflows, asset_data, deal_structure,
 #'                                       reference_rates = reference_rates)
 #' }
 #'
@@ -269,7 +269,7 @@ aggregate_cashflows <- function(cashflows, asset_data, deal_structure, verbose =
   checkmate::assert_list(cashflows)
   checkmate::assert_data_frame(asset_data)
   checkmate::assert_list(deal_structure)
-  
+
   # Check for reference_rates - optional for backward compatibility
   has_reference_rates <- !is.null(reference_rates)
   if (has_reference_rates) {
@@ -294,20 +294,20 @@ aggregate_cashflows <- function(cashflows, asset_data, deal_structure, verbose =
   n_periods <- dim(cashflows[[1]])[1]
   n_assets <- dim(cashflows[[1]])[3]
   n_bonds <- nrow(deal_structure$bonds)
-  
+
   # Validate reference_rates dimensions if provided
   if (has_reference_rates) {
     if (nrow(reference_rates) != n_paths || ncol(reference_rates) < n_periods) {
       stop("reference_rates dimensions must match [n_paths, n_periods]")
     }
   }
-  
+
   # Check if we have variable rate bonds
   has_floating_bonds <- FALSE
   if ("is_floating" %in% names(deal_structure$bonds)) {
     has_floating_bonds <- any(deal_structure$bonds$is_floating)
   }
-  
+
   if (has_floating_bonds && !has_reference_rates) {
     stop("Floating rate bonds require reference_rates parameter")
   }
@@ -328,26 +328,26 @@ aggregate_cashflows <- function(cashflows, asset_data, deal_structure, verbose =
 
     # Set initial bond balances
     bond_balances <- deal_structure$bonds$balance
-    
+
     # Initialize rate reset tracking for floating rate bonds
     bond_coupons <- deal_structure$bonds$coupon
     months_to_reset <- rep(0, n_bonds)
-    
+
     if (has_floating_bonds) {
       # Extract floating rate bond properties
       is_floating <- deal_structure$bonds$is_floating
       spread <- rep(0, n_bonds)
       reset_frequency <- rep(1, n_bonds)  # Default to monthly reset
-      
+
       if ("spread" %in% names(deal_structure$bonds)) {
         spread <- deal_structure$bonds$spread
       }
-      
+
       if ("reset_frequency" %in% names(deal_structure$bonds)) {
         reset_frequency <- deal_structure$bonds$reset_frequency
         reset_frequency[reset_frequency <= 0] <- 1  # Default to 1 for any invalid values
       }
-      
+
       # Initialize countdown to next reset for each bond
       months_to_reset <- ifelse(is_floating, 0, -1)  # -1 means never reset (fixed rate)
     }
@@ -358,7 +358,7 @@ aggregate_cashflows <- function(cashflows, asset_data, deal_structure, verbose =
       if (sum(bond_balances) <= 0.01) {
         break
       }
-      
+
       # Update floating rate bond coupons if needed
       if (has_floating_bonds) {
         for (b in 1:n_bonds) {
@@ -367,7 +367,7 @@ aggregate_cashflows <- function(cashflows, asset_data, deal_structure, verbose =
               # Reset the coupon rate based on index value + spread
               index_rate <- reference_rates[i, t]
               bond_coupons[b] <- index_rate + spread[b]
-              
+
               # Reset countdown to next reset
               months_to_reset[b] <- reset_frequency[b]
             } else {

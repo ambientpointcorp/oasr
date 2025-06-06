@@ -56,7 +56,7 @@ dns_params <- dnsr::get_calibrated_dns_params()
 rate_paths <- simulate_rates(dns_params, n_paths = 1, n_periods = 120)
 reference_rates <- extract_reference_rates(rate_paths, "1")  # 1-year rate index
 
-bond_cashflows <- aggregate_cashflows(cashflows, asset_data, deal_structure, 
+bond_cashflows <- aggregate_cashflows(cashflows, asset_data, deal_structure,
                                       reference_rates = reference_rates)
 }
 
