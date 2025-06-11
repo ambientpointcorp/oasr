@@ -81,13 +81,24 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
         stop("asset_data must include columns: balance, servicing, wac, term")
       }
 
-      original_balance <- asset$balance
+      current_balance <- asset$balance  # Current remaining balance
       servicing <- asset$servicing
       wac <- asset$wac
-      term <- asset$term
+      original_term <- asset$term       # Original term at origination
 
       # Extract optional loan characteristics
       age <- if ("age" %in% names(asset)) asset$age else 0
+
+      # If original_balance is provided, use it; otherwise calculate from current balance
+      if ("original_balance" %in% names(asset)) {
+        original_balance <- asset$original_balance
+      } else {
+        # If not provided, we need to back-calculate or make assumptions
+        # This is a limitation - ideally original_balance should always be provided
+        warning("original_balance not provided for asset ", asset$asset_id,
+                ". Using current balance as approximation.")
+        original_balance <- current_balance
+      }
 
       # Extract variable rate characteristics if available
       is_variable_rate <- FALSE
@@ -101,9 +112,9 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
 
         # Optional reset parameters
         reset_frequency <- if ("reset_frequency" %in% names(asset) && is_variable_rate)
-                              asset$reset_frequency else 12  # Default to annual reset
+          asset$reset_frequency else 12  # Default to annual reset
         next_reset <- if ("next_reset" %in% names(asset) && is_variable_rate)
-                        asset$next_reset else 0  # Default to immediate reset
+          asset$next_reset else 0  # Default to immediate reset
       }
 
       # Variable rate requires reference_rates
@@ -112,7 +123,7 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
       }
 
       # Calculate remaining term
-      remaining_term <- term - age
+      remaining_term <- original_term - age
 
       # Calculate monthly servicing rate
       servicing_rate <- servicing / 12
@@ -124,18 +135,19 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
       # But store current monthly rate for interest calculations
       payment_monthly_rate <- monthly_rate
 
-      # Calculate scheduled monthly payment (fixed for the life of the loan)
-      # P = L * r * (1 + r)^n / ((1 + r)^n - 1)
-      if (payment_monthly_rate > 0 && remaining_term > 0) {
-        scheduled_payment <- original_balance * payment_monthly_rate * (1 + payment_monthly_rate)^remaining_term /
-          ((1 + payment_monthly_rate)^remaining_term - 1)
+      # CORRECTION: Calculate scheduled monthly payment using ORIGINAL loan characteristics
+      # This payment remains fixed for the life of a fixed-rate loan
+      if (payment_monthly_rate > 0 && original_term > 0) {
+        scheduled_payment <- original_balance * payment_monthly_rate *
+          (1 + payment_monthly_rate)^original_term /
+          ((1 + payment_monthly_rate)^original_term - 1)
       } else {
         # Handle edge case where rate is 0 or term is 0
-        scheduled_payment <- original_balance / remaining_term
+        scheduled_payment <- original_balance / original_term
       }
 
-      # Set initial balance
-      remaining_balance <- original_balance
+      # Set initial balance to current balance (not original balance)
+      remaining_balance <- current_balance
 
       # Track months until next reset
       months_to_reset <- next_reset
@@ -154,6 +166,16 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
             index_rate <- reference_rates[i, t] / 12  # Convert annual to monthly
             monthly_rate <- index_rate + (rate_margin / 12)
 
+            # FOR VARIABLE RATE LOANS: Recalculate payment based on current rate and remaining term
+            # This is different from fixed-rate loans where payment stays constant
+            if (monthly_rate > 0 && remaining_term - t + 1 > 0) {
+              scheduled_payment <- remaining_balance * monthly_rate *
+                (1 + monthly_rate)^(remaining_term - t + 1) /
+                ((1 + monthly_rate)^(remaining_term - t + 1) - 1)
+            } else {
+              scheduled_payment <- remaining_balance / (remaining_term - t + 1)
+            }
+
             # Reset countdown to next reset
             months_to_reset <- reset_frequency
           } else {
@@ -171,7 +193,7 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
         # Calculate interest based on current rate
         interest_payment <- remaining_balance * monthly_rate
 
-        # Calculate scheduled principal (payment amount is fixed)
+        # Calculate scheduled principal (payment amount is fixed for fixed-rate loans)
         principal_payment <- min(remaining_balance, scheduled_payment - interest_payment)
 
         # Handle edge case where interest exceeds scheduled payment (negative amortization)
