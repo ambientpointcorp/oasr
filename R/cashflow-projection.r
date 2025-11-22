@@ -214,7 +214,7 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
         loss_amount <- default_amount
 
         # Recovery is accounted for separately in recovery_rates
-        recovery_amount <- recovery_rates[i, t, a] * remaining_balance
+        recovery_amount <- balance_after_scheduled * recovery_rates[i, t, a]
 
         # Update remaining balance
         new_balance <- remaining_balance - principal_payment - prepayment - default_amount
@@ -743,8 +743,7 @@ project_cashflows_with_io <- function (asset_data, credit_vectors, n_periods = N
           (1 - mdr)
         default_amount <- balance_after_scheduled * mdr
         loss_amount <- default_amount
-        recovery_amount <- recovery_rates[i, t, a] *
-          remaining_balance
+        recovery_amount <- balance_after_scheduled * recovery_rates[i, t, a]
         new_balance <- remaining_balance - principal_payment -
           prepayment - default_amount
         cf_array[t, 1, a] <- new_balance
