@@ -1,5 +1,6 @@
 #' @title Project Cash Flows for ABS/MBS Securities
 #' @description Projects cash flows for asset-backed securities based on prepayment and default rates.
+#' Supports parallel processing over paths and assets for improved performance.
 #'
 #' @param asset_data Data frame. Asset data with loan characteristics
 #' @param credit_vectors List. The result from \code{\link{calculate_credit_vectors}}
@@ -7,6 +8,9 @@
 #' @param reference_rates Matrix. Optional reference rate matrix with dimensions [n_paths, n_periods]
 #'        for variable rate loans, typically from \code{\link{extract_reference_rates}}.
 #'        If NULL, fixed rates are used.
+#' @param parallel Logical. Whether to use parallel processing. Default is FALSE.
+#' @param n_cores Integer. Number of cores to use for parallel processing.
+#'        If NULL, uses all available cores minus 1.
 #'
 #' @return A list of cash flow arrays for each path, with dimensions [time, component, asset]
 #'   where component is:
@@ -21,11 +25,16 @@
 #'   \item{9}{Total payment}
 #'
 #' @export
-project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, reference_rates = NULL) {
+project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, reference_rates = NULL,
+                              parallel = FALSE, n_cores = NULL) {
 
   # Parameter validation
   checkmate::assert_data_frame(asset_data)
   checkmate::assert_list(credit_vectors)
+  checkmate::assert_logical(parallel, len = 1)
+  if (!is.null(n_cores)) {
+    checkmate::assert_int(n_cores, lower = 1)
+  }
 
   # Check for reference_rates - optional for backward compatibility
   has_reference_rates <- !is.null(reference_rates)
@@ -60,183 +69,200 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
          ") does not match credit_vectors (", n_assets, ")")
   }
 
-  # Initialize list to store cash flows
-  cashflows <- vector("list", n_paths)
+  # Helper function to project cash flows for a single asset on a single path
+  project_single_asset <- function(path_idx, asset_idx, asset_data, prepay_rates, default_rates,
+                                   recovery_rates, reference_rates, has_reference_rates, n_periods) {
+    # Get asset-specific data
+    asset <- asset_data[asset_idx, ]
 
-  # Process each path
-  for (i in 1:n_paths) {
-    # Initialize cashflow array for this path
-    # Dimensions: [time, component, asset]
-    # Components: [1] remaining_balance, [2] scheduled_principal, [3] prepayment,
-    #             [4] default, [5] loss, [6] recovery, [7] interest, [8] servicing, [9] total
-    cf_array <- array(0, dim = c(n_periods, 9, n_assets))
+    # Extract required loan characteristics
+    current_balance <- asset$balance
+    servicing <- asset$servicing
+    wac <- asset$wac
+    original_term <- asset$term
 
-    # Process each asset
-    for (a in 1:n_assets) {
-      # Get asset-specific data
-      asset <- asset_data[a, ]
+    # Extract optional loan characteristics
+    age <- if ("age" %in% names(asset)) asset$age else 0
 
-      # Extract required loan characteristics
-      if (!all(c("balance", "servicing", "wac", "term") %in% names(asset))) {
-        stop("asset_data must include columns: balance, servicing, wac, term")
-      }
-
-      current_balance <- asset$balance  # Current remaining balance
-      servicing <- asset$servicing
-      wac <- asset$wac
-      original_term <- asset$term       # Original term at origination
-
-      # Extract optional loan characteristics
-      age <- if ("age" %in% names(asset)) asset$age else 0
-
-      # If original_balance is provided, use it; otherwise calculate from current balance
-      if ("original_balance" %in% names(asset)) {
-        original_balance <- asset$original_balance
-      } else {
-        # If not provided, we need to back-calculate or make assumptions
-        # This is a limitation - ideally original_balance should always be provided
-        warning("original_balance not provided for asset ", asset$asset_id,
-                ". Using current balance as approximation.")
-        original_balance <- current_balance
-      }
-
-      # Extract variable rate characteristics if available
-      is_variable_rate <- FALSE
-      rate_margin <- 0
-      reset_frequency <- 0
-      next_reset <- 0
-
-      if (all(c("is_variable_rate", "rate_margin") %in% names(asset))) {
-        is_variable_rate <- isTRUE(asset$is_variable_rate)
-        rate_margin <- if (is_variable_rate) asset$rate_margin else 0
-
-        # Optional reset parameters
-        reset_frequency <- if ("reset_frequency" %in% names(asset) && is_variable_rate)
-          asset$reset_frequency else 12  # Default to annual reset
-        next_reset <- if ("next_reset" %in% names(asset) && is_variable_rate)
-          asset$next_reset else 0  # Default to immediate reset
-      }
-
-      # Variable rate requires reference_rates
-      if (is_variable_rate && !has_reference_rates) {
-        stop("Variable rate loans require reference_rates parameter")
-      }
-
-      # Calculate remaining term
-      remaining_term <- original_term - age
-
-      # Calculate monthly servicing rate
-      servicing_rate <- servicing / 12
-
-      # Calculate initial monthly interest rate
-      monthly_rate <- wac / 12
-
-      # For variable rate loans, calculate payment based on fully-indexed rate at origination
-      # But store current monthly rate for interest calculations
-      payment_monthly_rate <- monthly_rate
-
-      # CORRECTION: Calculate scheduled monthly payment using ORIGINAL loan characteristics
-      # This payment remains fixed for the life of a fixed-rate loan
-      if (payment_monthly_rate > 0 && original_term > 0) {
-        scheduled_payment <- original_balance * payment_monthly_rate *
-          (1 + payment_monthly_rate)^original_term /
-          ((1 + payment_monthly_rate)^original_term - 1)
-      } else {
-        # Handle edge case where rate is 0 or term is 0
-        scheduled_payment <- original_balance / original_term
-      }
-
-      # Set initial balance to current balance (not original balance)
-      remaining_balance <- current_balance
-
-      # Track months until next reset
-      months_to_reset <- next_reset
-
-      # Project cash flows for this asset
-      for (t in 1:min(n_periods, remaining_term)) {
-        # Skip if loan is fully paid off
-        if (remaining_balance <= 0.01) {
-          break
-        }
-
-        # Handle rate reset for variable rate loans
-        if (is_variable_rate) {
-          if (months_to_reset <= 0) {
-            # Reset the rate based on index value + margin
-            index_rate <- reference_rates[i, t] / 12  # Convert annual to monthly
-            monthly_rate <- index_rate + (rate_margin / 12)
-
-            # FOR VARIABLE RATE LOANS: Recalculate payment based on current rate and remaining term
-            # This is different from fixed-rate loans where payment stays constant
-            if (monthly_rate > 0 && remaining_term - t + 1 > 0) {
-              scheduled_payment <- remaining_balance * monthly_rate *
-                (1 + monthly_rate)^(remaining_term - t + 1) /
-                ((1 + monthly_rate)^(remaining_term - t + 1) - 1)
-            } else {
-              scheduled_payment <- remaining_balance / (remaining_term - t + 1)
-            }
-
-            # Reset countdown to next reset
-            months_to_reset <- reset_frequency
-          } else {
-            months_to_reset <- months_to_reset - 1
-          }
-        }
-
-        # Get prepayment and default rates for this path, time, asset
-        smm <- prepay_rates[i, t, a]
-        mdr <- default_rates[i, t, a]
-
-        # Calculate servicing fees
-        servicing_fees <- remaining_balance * servicing_rate
-
-        # Calculate interest based on current rate
-        interest_payment <- remaining_balance * monthly_rate
-
-        # Calculate scheduled principal (payment amount is fixed for fixed-rate loans)
-        principal_payment <- min(remaining_balance, scheduled_payment - interest_payment)
-
-        # Handle edge case where interest exceeds scheduled payment (negative amortization)
-        if (principal_payment < 0) {
-          principal_payment <- 0
-        }
-
-        # Calculate remaining balance after scheduled payment
-        balance_after_scheduled <- remaining_balance - principal_payment
-
-        # Calculate prepayment amount
-        prepayment <- balance_after_scheduled * smm * (1 - mdr)
-
-        # Calculate default amount
-        default_amount <- balance_after_scheduled * mdr
-
-        # Calculate loss amount (default minus recovery)
-        loss_amount <- default_amount
-
-        # Recovery is accounted for separately in recovery_rates
-        recovery_amount <- balance_after_scheduled * recovery_rates[i, t, a]
-
-        # Update remaining balance
-        new_balance <- remaining_balance - principal_payment - prepayment - default_amount
-
-        # Store cash flow components
-        cf_array[t, 1, a] <- new_balance                   # Remaining balance
-        cf_array[t, 2, a] <- principal_payment             # Scheduled principal
-        cf_array[t, 3, a] <- prepayment                    # Prepayment
-        cf_array[t, 4, a] <- default_amount                # Default
-        cf_array[t, 5, a] <- loss_amount                   # Loss
-        cf_array[t, 6, a] <- recovery_amount               # Recovery
-        cf_array[t, 7, a] <- interest_payment              # Interest
-        cf_array[t, 8, a] <- servicing_fees                # Servicing
-        cf_array[t, 9, a] <- principal_payment + prepayment + interest_payment - servicing_fees + recovery_amount  # Total payment
-
-        # Update for next period
-        remaining_balance <- new_balance
-      }
+    # If original_balance is provided, use it; otherwise use current balance
+    if ("original_balance" %in% names(asset)) {
+      original_balance <- asset$original_balance
+    } else {
+      original_balance <- current_balance
     }
 
-    # Store cash flows for this path
-    cashflows[[i]] <- cf_array
+    # Extract variable rate characteristics if available
+    is_variable_rate <- FALSE
+    rate_margin <- 0
+    reset_frequency <- 12
+    next_reset <- 0
+
+    if (all(c("is_variable_rate", "rate_margin") %in% names(asset))) {
+      is_variable_rate <- isTRUE(asset$is_variable_rate)
+      rate_margin <- if (is_variable_rate) asset$rate_margin else 0
+      reset_frequency <- if ("reset_frequency" %in% names(asset) && is_variable_rate)
+        asset$reset_frequency else 12
+      next_reset <- if ("next_reset" %in% names(asset) && is_variable_rate)
+        asset$next_reset else 0
+    }
+
+    if (is_variable_rate && !has_reference_rates) {
+      stop("Variable rate loans require reference_rates parameter")
+    }
+
+    # Calculate remaining term
+    remaining_term <- original_term - age
+
+    # Calculate monthly servicing rate
+    servicing_rate <- servicing / 12
+
+    # Calculate initial monthly interest rate
+    monthly_rate <- wac / 12
+    payment_monthly_rate <- monthly_rate
+
+    # Calculate scheduled monthly payment using ORIGINAL loan characteristics
+    if (payment_monthly_rate > 0 && original_term > 0) {
+      scheduled_payment <- original_balance * payment_monthly_rate *
+        (1 + payment_monthly_rate)^original_term /
+        ((1 + payment_monthly_rate)^original_term - 1)
+    } else {
+      scheduled_payment <- original_balance / original_term
+    }
+
+    remaining_balance <- current_balance
+    months_to_reset <- next_reset
+
+    # Initialize result matrix for this asset [time, component]
+    cf_matrix <- matrix(0, nrow = n_periods, ncol = 9)
+
+    # Project cash flows for this asset
+    for (t in 1:min(n_periods, remaining_term)) {
+      if (remaining_balance <= 0.01) {
+        break
+      }
+
+      # Handle rate reset for variable rate loans
+      if (is_variable_rate) {
+        if (months_to_reset <= 0) {
+          index_rate <- reference_rates[path_idx, t] / 12
+          monthly_rate <- index_rate + (rate_margin / 12)
+
+          if (monthly_rate > 0 && remaining_term - t + 1 > 0) {
+            scheduled_payment <- remaining_balance * monthly_rate *
+              (1 + monthly_rate)^(remaining_term - t + 1) /
+              ((1 + monthly_rate)^(remaining_term - t + 1) - 1)
+          } else {
+            scheduled_payment <- remaining_balance / (remaining_term - t + 1)
+          }
+          months_to_reset <- reset_frequency
+        } else {
+          months_to_reset <- months_to_reset - 1
+        }
+      }
+
+      # Get prepayment and default rates
+      smm <- prepay_rates[path_idx, t, asset_idx]
+      mdr <- default_rates[path_idx, t, asset_idx]
+
+      # Calculate cash flow components
+      servicing_fees <- remaining_balance * servicing_rate
+      interest_payment <- remaining_balance * monthly_rate
+      principal_payment <- min(remaining_balance, scheduled_payment - interest_payment)
+      if (principal_payment < 0) principal_payment <- 0
+
+      balance_after_scheduled <- remaining_balance - principal_payment
+      prepayment <- balance_after_scheduled * smm * (1 - mdr)
+      default_amount <- balance_after_scheduled * mdr
+      loss_amount <- default_amount
+      recovery_amount <- balance_after_scheduled * recovery_rates[path_idx, t, asset_idx]
+      new_balance <- remaining_balance - principal_payment - prepayment - default_amount
+
+      # Store cash flow components
+      cf_matrix[t, 1] <- new_balance
+      cf_matrix[t, 2] <- principal_payment
+      cf_matrix[t, 3] <- prepayment
+      cf_matrix[t, 4] <- default_amount
+      cf_matrix[t, 5] <- loss_amount
+      cf_matrix[t, 6] <- recovery_amount
+      cf_matrix[t, 7] <- interest_payment
+      cf_matrix[t, 8] <- servicing_fees
+      cf_matrix[t, 9] <- principal_payment + prepayment + interest_payment - servicing_fees + recovery_amount
+
+      remaining_balance <- new_balance
+    }
+
+    return(cf_matrix)
+  }
+
+  # Execute with or without parallelization
+  if (parallel) {
+    # Determine number of cores
+    if (is.null(n_cores)) {
+      n_cores <- max(1, parallel::detectCores() - 1)
+    }
+
+    # Create all (path, asset) index combinations for full parallelization
+    # This flattens the 2D problem into a 1D parallel task
+    task_indices <- expand.grid(path_idx = 1:n_paths, asset_idx = 1:n_assets)
+    n_tasks <- nrow(task_indices)
+    n_cores <- min(n_cores, n_tasks)  # Don't use more cores than tasks
+
+    # Helper function to process a single (path, asset) combination
+    process_single_task <- function(task_row, asset_data, prepay_rates, default_rates,
+                                    recovery_rates, reference_rates, has_reference_rates, n_periods) {
+      path_idx <- task_row[1]
+      asset_idx <- task_row[2]
+      cf_matrix <- project_single_asset(path_idx, asset_idx, asset_data, prepay_rates, default_rates,
+                                        recovery_rates, reference_rates, has_reference_rates, n_periods)
+      return(list(path_idx = path_idx, asset_idx = asset_idx, cf_matrix = cf_matrix))
+    }
+
+    # Check OS for appropriate parallel method
+    if (.Platform$OS.type == "unix") {
+      # Use mclapply on Unix-like systems (faster, fork-based)
+      results <- parallel::mclapply(1:n_tasks, function(i) {
+        process_single_task(as.numeric(task_indices[i, ]), asset_data, prepay_rates, default_rates,
+                            recovery_rates, reference_rates, has_reference_rates, n_periods)
+      }, mc.cores = n_cores)
+    } else {
+      # Use parLapply on Windows (socket-based cluster)
+      cl <- parallel::makeCluster(n_cores)
+
+      # Export necessary objects and functions to cluster
+      parallel::clusterExport(cl, c("asset_data", "prepay_rates", "default_rates",
+                                    "recovery_rates", "reference_rates", "has_reference_rates",
+                                    "n_periods", "task_indices", "project_single_asset",
+                                    "process_single_task"),
+                              envir = environment())
+
+      results <- parallel::parLapply(cl, 1:n_tasks, function(i) {
+        process_single_task(as.numeric(task_indices[i, ]), asset_data, prepay_rates, default_rates,
+                            recovery_rates, reference_rates, has_reference_rates, n_periods)
+      })
+      parallel::stopCluster(cl)
+    }
+
+    # Reassemble results into the expected list of arrays structure
+    cashflows <- vector("list", n_paths)
+    for (i in 1:n_paths) {
+      cashflows[[i]] <- array(0, dim = c(n_periods, 9, n_assets))
+    }
+
+    for (res in results) {
+      cashflows[[res$path_idx]][, , res$asset_idx] <- res$cf_matrix
+    }
+
+  } else {
+    # Sequential processing
+    cashflows <- vector("list", n_paths)
+    for (i in 1:n_paths) {
+      cf_array <- array(0, dim = c(n_periods, 9, n_assets))
+      for (a in 1:n_assets) {
+        cf_array[, , a] <- project_single_asset(i, a, asset_data, prepay_rates, default_rates,
+                                                 recovery_rates, reference_rates, has_reference_rates, n_periods)
+      }
+      cashflows[[i]] <- cf_array
+    }
   }
 
   return(cashflows)
@@ -589,6 +615,7 @@ calculate_average_life <- function(cashflows, asset_level = TRUE,
 
 #' @title Project Cash Flows for ABS/MBS Securities with IO Strip
 #' @description Projects cash flows for asset-backed securities with IO strip based on prepayment and default rates.
+#' Supports parallel processing over paths and assets for improved performance.
 #'
 #' @param asset_data Data frame. Asset data with loan characteristics
 #' @param credit_vectors List. The result from \code{\link{calculate_credit_vectors}}
@@ -596,6 +623,9 @@ calculate_average_life <- function(cashflows, asset_level = TRUE,
 #' @param reference_rates Matrix. Optional reference rate matrix with dimensions [n_paths, n_periods]
 #'        for variable rate loans, typically from \code{\link{extract_reference_rates}}.
 #'        If NULL, fixed rates are used.
+#' @param parallel Logical. Whether to use parallel processing. Default is FALSE.
+#' @param n_cores Integer. Number of cores to use for parallel processing.
+#'        If NULL, uses all available cores minus 1.
 #'
 #' @return A list of cash flow arrays for each path, with dimensions [time, component, asset]
 #'   where component is:
@@ -611,156 +641,232 @@ calculate_average_life <- function(cashflows, asset_level = TRUE,
 #'   \item{10}{Total payment}
 #'
 #' @export
-project_cashflows_with_io <- function (asset_data, credit_vectors, n_periods = NULL, reference_rates = NULL)
-{
+project_cashflows_with_io <- function(asset_data, credit_vectors, n_periods = NULL, reference_rates = NULL,
+                                      parallel = FALSE, n_cores = NULL) {
+
+  # Parameter validation
   checkmate::assert_data_frame(asset_data)
   checkmate::assert_list(credit_vectors)
+  checkmate::assert_logical(parallel, len = 1)
+  if (!is.null(n_cores)) {
+    checkmate::assert_int(n_cores, lower = 1)
+  }
+
   has_reference_rates <- !is.null(reference_rates)
   if (has_reference_rates) {
     checkmate::assert_matrix(reference_rates)
   }
+
   prepay_rates <- credit_vectors$prepay_rates
   default_rates <- credit_vectors$default_rates
   recovery_rates <- credit_vectors$recovery_rates
+
   n_paths <- dim(prepay_rates)[1]
   if (is.null(n_periods)) {
     n_periods <- dim(prepay_rates)[2]
-  }
-  else {
+  } else {
     n_periods <- min(n_periods, dim(prepay_rates)[2])
   }
   n_assets <- dim(prepay_rates)[3]
+
   if (has_reference_rates) {
-    if (nrow(reference_rates) != n_paths || ncol(reference_rates) <
-        n_periods) {
+    if (nrow(reference_rates) != n_paths || ncol(reference_rates) < n_periods) {
       stop("reference_rates dimensions must match [n_paths, n_periods]")
     }
   }
+
   if (nrow(asset_data) != n_assets) {
     stop("Number of assets in asset_data (", nrow(asset_data),
          ") does not match credit_vectors (", n_assets, ")")
   }
-  cashflows <- vector("list", n_paths)
-  for (i in 1:n_paths) {
-    cf_array <- array(0, dim = c(n_periods, 10, n_assets))
-    for (a in 1:n_assets) {
-      asset <- asset_data[a, ]
-      if (!all(c("balance", "servicing", "io_strip", "wac", "term") %in%
-               names(asset))) {
-        stop("asset_data must include columns: balance, servicing, io_strip, wac, term")
-      }
-      current_balance <- asset$balance
-      servicing <- asset$servicing
-      io_strip <- asset$io_strip
-      wac <- asset$wac
-      original_term <- asset$term
-      age <- if ("age" %in% names(asset))
-        asset$age
-      else 0
-      if ("original_balance" %in% names(asset)) {
-        original_balance <- asset$original_balance
-      }
-      else {
-        warning("original_balance not provided for asset ",
-                asset$asset_id, ". Using current balance as approximation.")
-        original_balance <- current_balance
-      }
-      is_variable_rate <- FALSE
-      rate_margin <- 0
-      reset_frequency <- 0
-      next_reset <- 0
-      if (all(c("is_variable_rate", "rate_margin") %in%
-              names(asset))) {
-        is_variable_rate <- isTRUE(asset$is_variable_rate)
-        rate_margin <- if (is_variable_rate)
-          asset$rate_margin
-        else 0
-        reset_frequency <- if ("reset_frequency" %in%
-                               names(asset) && is_variable_rate)
-          asset$reset_frequency
-        else 12
-        next_reset <- if ("next_reset" %in% names(asset) &&
-                          is_variable_rate)
-          asset$next_reset
-        else 0
-      }
-      if (is_variable_rate && !has_reference_rates) {
-        stop("Variable rate loans require reference_rates parameter")
-      }
-      remaining_term <- original_term - age
-      servicing_rate <- servicing/12
-      io_strip_rate <- io_strip/12
-      monthly_rate <- wac/12
-      payment_monthly_rate <- monthly_rate
-      if (payment_monthly_rate > 0 && original_term > 0) {
-        scheduled_payment <- original_balance * payment_monthly_rate *
-          (1 + payment_monthly_rate)^original_term/((1 +
-                                                       payment_monthly_rate)^original_term - 1)
-      }
-      else {
-        scheduled_payment <- original_balance/original_term
-      }
-      remaining_balance <- current_balance
-      months_to_reset <- next_reset
-      for (t in 1:min(n_periods, remaining_term)) {
-        if (remaining_balance <= 0.01) {
-          break
-        }
-        if (is_variable_rate) {
-          if (months_to_reset <= 0) {
-            index_rate <- reference_rates[i, t]/12
-            monthly_rate <- index_rate + (rate_margin/12)
-            if (monthly_rate > 0 && remaining_term -
-                t + 1 > 0) {
-              scheduled_payment <- remaining_balance *
-                monthly_rate * (1 + monthly_rate)^(remaining_term -
-                                                     t + 1)/((1 + monthly_rate)^(remaining_term -
-                                                                                   t + 1) - 1)
-            }
-            else {
-              scheduled_payment <- remaining_balance/(remaining_term -
-                                                        t + 1)
-            }
-            months_to_reset <- reset_frequency
-          }
-          else {
-            months_to_reset <- months_to_reset - 1
-          }
-        }
-        smm <- prepay_rates[i, t, a]
-        mdr <- default_rates[i, t, a]
-        servicing_fees <- remaining_balance * servicing_rate
-        io_fees <- remaining_balance * io_strip_rate
-        interest_payment <- remaining_balance * monthly_rate
-        principal_payment <- min(remaining_balance, scheduled_payment -
-                                   interest_payment)
-        if (principal_payment < 0) {
-          principal_payment <- 0
-        }
-        balance_after_scheduled <- remaining_balance -
-          principal_payment
-        prepayment <- balance_after_scheduled * smm *
-          (1 - mdr)
-        default_amount <- balance_after_scheduled * mdr
-        loss_amount <- default_amount
-        recovery_amount <- balance_after_scheduled * recovery_rates[i, t, a]
-        new_balance <- remaining_balance - principal_payment -
-          prepayment - default_amount
-        cf_array[t, 1, a] <- new_balance
-        cf_array[t, 2, a] <- principal_payment
-        cf_array[t, 3, a] <- prepayment
-        cf_array[t, 4, a] <- default_amount
-        cf_array[t, 5, a] <- loss_amount
-        cf_array[t, 6, a] <- recovery_amount
-        cf_array[t, 7, a] <- interest_payment
-        cf_array[t, 8, a] <- servicing_fees
-        cf_array[t, 9, a] <- io_fees
-        cf_array[t, 10, a] <- principal_payment + prepayment +
-          interest_payment - servicing_fees - io_fees + recovery_amount
-        remaining_balance <- new_balance
-      }
+
+  # Helper function to project cash flows for a single asset on a single path with IO strip
+  project_single_asset_io <- function(path_idx, asset_idx, asset_data, prepay_rates, default_rates,
+                                      recovery_rates, reference_rates, has_reference_rates, n_periods) {
+    asset <- asset_data[asset_idx, ]
+
+    if (!all(c("balance", "servicing", "io_strip", "wac", "term") %in% names(asset))) {
+      stop("asset_data must include columns: balance, servicing, io_strip, wac, term")
     }
-    cashflows[[i]] <- cf_array
+
+    current_balance <- asset$balance
+    servicing <- asset$servicing
+    io_strip <- asset$io_strip
+    wac <- asset$wac
+    original_term <- asset$term
+
+    age <- if ("age" %in% names(asset)) asset$age else 0
+
+    if ("original_balance" %in% names(asset)) {
+      original_balance <- asset$original_balance
+    } else {
+      original_balance <- current_balance
+    }
+
+    is_variable_rate <- FALSE
+    rate_margin <- 0
+    reset_frequency <- 12
+    next_reset <- 0
+
+    if (all(c("is_variable_rate", "rate_margin") %in% names(asset))) {
+      is_variable_rate <- isTRUE(asset$is_variable_rate)
+      rate_margin <- if (is_variable_rate) asset$rate_margin else 0
+      reset_frequency <- if ("reset_frequency" %in% names(asset) && is_variable_rate)
+        asset$reset_frequency else 12
+      next_reset <- if ("next_reset" %in% names(asset) && is_variable_rate)
+        asset$next_reset else 0
+    }
+
+    if (is_variable_rate && !has_reference_rates) {
+      stop("Variable rate loans require reference_rates parameter")
+    }
+
+    remaining_term <- original_term - age
+    servicing_rate <- servicing / 12
+    io_strip_rate <- io_strip / 12
+    monthly_rate <- wac / 12
+    payment_monthly_rate <- monthly_rate
+
+    if (payment_monthly_rate > 0 && original_term > 0) {
+      scheduled_payment <- original_balance * payment_monthly_rate *
+        (1 + payment_monthly_rate)^original_term /
+        ((1 + payment_monthly_rate)^original_term - 1)
+    } else {
+      scheduled_payment <- original_balance / original_term
+    }
+
+    remaining_balance <- current_balance
+    months_to_reset <- next_reset
+
+    # Initialize result matrix for this asset [time, component]
+    cf_matrix <- matrix(0, nrow = n_periods, ncol = 10)
+
+    for (t in 1:min(n_periods, remaining_term)) {
+      if (remaining_balance <= 0.01) {
+        break
+      }
+
+      if (is_variable_rate) {
+        if (months_to_reset <= 0) {
+          index_rate <- reference_rates[path_idx, t] / 12
+          monthly_rate <- index_rate + (rate_margin / 12)
+
+          if (monthly_rate > 0 && remaining_term - t + 1 > 0) {
+            scheduled_payment <- remaining_balance * monthly_rate *
+              (1 + monthly_rate)^(remaining_term - t + 1) /
+              ((1 + monthly_rate)^(remaining_term - t + 1) - 1)
+          } else {
+            scheduled_payment <- remaining_balance / (remaining_term - t + 1)
+          }
+          months_to_reset <- reset_frequency
+        } else {
+          months_to_reset <- months_to_reset - 1
+        }
+      }
+
+      smm <- prepay_rates[path_idx, t, asset_idx]
+      mdr <- default_rates[path_idx, t, asset_idx]
+
+      servicing_fees <- remaining_balance * servicing_rate
+      io_fees <- remaining_balance * io_strip_rate
+      interest_payment <- remaining_balance * monthly_rate
+      principal_payment <- min(remaining_balance, scheduled_payment - interest_payment)
+      if (principal_payment < 0) principal_payment <- 0
+
+      balance_after_scheduled <- remaining_balance - principal_payment
+      prepayment <- balance_after_scheduled * smm * (1 - mdr)
+      default_amount <- balance_after_scheduled * mdr
+      loss_amount <- default_amount
+      recovery_amount <- balance_after_scheduled * recovery_rates[path_idx, t, asset_idx]
+      new_balance <- remaining_balance - principal_payment - prepayment - default_amount
+
+      cf_matrix[t, 1] <- new_balance
+      cf_matrix[t, 2] <- principal_payment
+      cf_matrix[t, 3] <- prepayment
+      cf_matrix[t, 4] <- default_amount
+      cf_matrix[t, 5] <- loss_amount
+      cf_matrix[t, 6] <- recovery_amount
+      cf_matrix[t, 7] <- interest_payment
+      cf_matrix[t, 8] <- servicing_fees
+      cf_matrix[t, 9] <- io_fees
+      cf_matrix[t, 10] <- principal_payment + prepayment + interest_payment - servicing_fees - io_fees + recovery_amount
+
+      remaining_balance <- new_balance
+    }
+
+    return(cf_matrix)
   }
+
+  # Execute with or without parallelization
+  if (parallel) {
+    # Determine number of cores
+    if (is.null(n_cores)) {
+      n_cores <- max(1, parallel::detectCores() - 1)
+    }
+
+    # Create all (path, asset) index combinations for full parallelization
+    # This flattens the 2D problem into a 1D parallel task
+    task_indices <- expand.grid(path_idx = 1:n_paths, asset_idx = 1:n_assets)
+    n_tasks <- nrow(task_indices)
+    n_cores <- min(n_cores, n_tasks)  # Don't use more cores than tasks
+
+    # Helper function to process a single (path, asset) combination
+    process_single_task_io <- function(task_row, asset_data, prepay_rates, default_rates,
+                                       recovery_rates, reference_rates, has_reference_rates, n_periods) {
+      path_idx <- task_row[1]
+      asset_idx <- task_row[2]
+      cf_matrix <- project_single_asset_io(path_idx, asset_idx, asset_data, prepay_rates, default_rates,
+                                           recovery_rates, reference_rates, has_reference_rates, n_periods)
+      return(list(path_idx = path_idx, asset_idx = asset_idx, cf_matrix = cf_matrix))
+    }
+
+    # Check OS for appropriate parallel method
+    if (.Platform$OS.type == "unix") {
+      # Use mclapply on Unix-like systems (faster, fork-based)
+      results <- parallel::mclapply(1:n_tasks, function(i) {
+        process_single_task_io(as.numeric(task_indices[i, ]), asset_data, prepay_rates, default_rates,
+                               recovery_rates, reference_rates, has_reference_rates, n_periods)
+      }, mc.cores = n_cores)
+    } else {
+      # Use parLapply on Windows (socket-based cluster)
+      cl <- parallel::makeCluster(n_cores)
+
+      # Export necessary objects and functions to cluster
+      parallel::clusterExport(cl, c("asset_data", "prepay_rates", "default_rates",
+                                    "recovery_rates", "reference_rates", "has_reference_rates",
+                                    "n_periods", "task_indices", "project_single_asset_io",
+                                    "process_single_task_io"),
+                              envir = environment())
+
+      results <- parallel::parLapply(cl, 1:n_tasks, function(i) {
+        process_single_task_io(as.numeric(task_indices[i, ]), asset_data, prepay_rates, default_rates,
+                               recovery_rates, reference_rates, has_reference_rates, n_periods)
+      })
+      parallel::stopCluster(cl)
+    }
+
+    # Reassemble results into the expected list of arrays structure
+    cashflows <- vector("list", n_paths)
+    for (i in 1:n_paths) {
+      cashflows[[i]] <- array(0, dim = c(n_periods, 10, n_assets))
+    }
+
+    for (res in results) {
+      cashflows[[res$path_idx]][, , res$asset_idx] <- res$cf_matrix
+    }
+
+  } else {
+    # Sequential processing
+    cashflows <- vector("list", n_paths)
+    for (i in 1:n_paths) {
+      cf_array <- array(0, dim = c(n_periods, 10, n_assets))
+      for (a in 1:n_assets) {
+        cf_array[, , a] <- project_single_asset_io(i, a, asset_data, prepay_rates, default_rates,
+                                                    recovery_rates, reference_rates, has_reference_rates, n_periods)
+      }
+      cashflows[[i]] <- cf_array
+    }
+  }
+
   return(cashflows)
 }

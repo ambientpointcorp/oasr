@@ -8,7 +8,9 @@ project_cashflows(
   asset_data,
   credit_vectors,
   n_periods = NULL,
-  reference_rates = NULL
+  reference_rates = NULL,
+  parallel = FALSE,
+  n_cores = NULL
 )
 }
 \arguments{
@@ -21,6 +23,11 @@ project_cashflows(
 \item{reference_rates}{Matrix. Optional reference rate matrix with dimensions \link{n_paths, n_periods}
 for variable rate loans, typically from \code{\link{extract_reference_rates}}.
 If NULL, fixed rates are used.}
+
+\item{parallel}{Logical. Whether to use parallel processing. Default is FALSE.}
+
+\item{n_cores}{Integer. Number of cores to use for parallel processing.
+If NULL, uses all available cores minus 1.}
 }
 \value{
 A list of cash flow arrays for each path, with dimensions \link{time, component, asset}
@@ -37,4 +44,5 @@ where component is:
 }
 \description{
 Projects cash flows for asset-backed securities based on prepayment and default rates.
+Supports parallel processing over paths and assets for improved performance.
 }
