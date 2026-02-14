@@ -9,6 +9,9 @@
 #'        for variable rate loans, typically from \code{\link{extract_reference_rates}}.
 #'        If NULL, fixed rates are used.
 #' @param parallel Logical. Whether to use parallel processing. Default is FALSE.
+#'        Internally aliased to \code{run_parallel} to avoid shadowing the
+#'        \code{parallel} package. Both names are accepted.
+#' @param run_parallel Logical. Alias for \code{parallel}. Preferred in new code.
 #' @param n_cores Integer. Number of cores to use for parallel processing.
 #'        If NULL, uses all available cores minus 1.
 #'
@@ -26,12 +29,12 @@
 #'
 #' @export
 project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, reference_rates = NULL,
-                              parallel = FALSE, n_cores = NULL) {
+                              parallel = FALSE, n_cores = NULL, run_parallel = parallel) {
 
   # Parameter validation
   checkmate::assert_data_frame(asset_data)
   checkmate::assert_list(credit_vectors)
-  checkmate::assert_logical(parallel, len = 1)
+  checkmate::assert_logical(run_parallel, len = 1)
   if (!is.null(n_cores)) {
     checkmate::assert_int(n_cores, lower = 1)
   }
@@ -195,7 +198,7 @@ project_cashflows <- function(asset_data, credit_vectors, n_periods = NULL, refe
   }
 
   # Execute with or without parallelization
-  if (parallel) {
+  if (run_parallel) {
     # Determine number of cores
     if (is.null(n_cores)) {
       n_cores <- max(1, parallel::detectCores() - 1)
@@ -624,6 +627,9 @@ calculate_average_life <- function(cashflows, asset_level = TRUE,
 #'        for variable rate loans, typically from \code{\link{extract_reference_rates}}.
 #'        If NULL, fixed rates are used.
 #' @param parallel Logical. Whether to use parallel processing. Default is FALSE.
+#'        Internally aliased to \code{run_parallel} to avoid shadowing the
+#'        \code{parallel} package. Both names are accepted.
+#' @param run_parallel Logical. Alias for \code{parallel}. Preferred in new code.
 #' @param n_cores Integer. Number of cores to use for parallel processing.
 #'        If NULL, uses all available cores minus 1.
 #'
@@ -642,12 +648,12 @@ calculate_average_life <- function(cashflows, asset_level = TRUE,
 #'
 #' @export
 project_cashflows_with_io <- function(asset_data, credit_vectors, n_periods = NULL, reference_rates = NULL,
-                                      parallel = FALSE, n_cores = NULL) {
+                                      parallel = FALSE, n_cores = NULL, run_parallel = parallel) {
 
   # Parameter validation
   checkmate::assert_data_frame(asset_data)
   checkmate::assert_list(credit_vectors)
-  checkmate::assert_logical(parallel, len = 1)
+  checkmate::assert_logical(run_parallel, len = 1)
   if (!is.null(n_cores)) {
     checkmate::assert_int(n_cores, lower = 1)
   }
@@ -798,7 +804,7 @@ project_cashflows_with_io <- function(asset_data, credit_vectors, n_periods = NU
   }
 
   # Execute with or without parallelization
-  if (parallel) {
+  if (run_parallel) {
     # Determine number of cores
     if (is.null(n_cores)) {
       n_cores <- max(1, parallel::detectCores() - 1)

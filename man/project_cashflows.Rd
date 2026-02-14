@@ -10,7 +10,8 @@ project_cashflows(
   n_periods = NULL,
   reference_rates = NULL,
   parallel = FALSE,
-  n_cores = NULL
+  n_cores = NULL,
+  run_parallel = parallel
 )
 }
 \arguments{
@@ -24,10 +25,14 @@ project_cashflows(
 for variable rate loans, typically from \code{\link{extract_reference_rates}}.
 If NULL, fixed rates are used.}
 
-\item{parallel}{Logical. Whether to use parallel processing. Default is FALSE.}
+\item{parallel}{Logical. Whether to use parallel processing. Default is FALSE.
+Internally aliased to \code{run_parallel} to avoid shadowing the
+\code{parallel} package. Both names are accepted.}
 
 \item{n_cores}{Integer. Number of cores to use for parallel processing.
 If NULL, uses all available cores minus 1.}
+
+\item{run_parallel}{Logical. Alias for \code{parallel}. Preferred in new code.}
 }
 \value{
 A list of cash flow arrays for each path, with dimensions \link{time, component, asset}

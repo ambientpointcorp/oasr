@@ -2,13 +2,16 @@
 % Please edit documentation in R/prepayment-models.r
 \name{calculate_credit_vectors}
 \alias{calculate_credit_vectors}
-\title{Calculate Prepayment and Default Rates}
+\title{Calculate Prepayment and Default Rates (Vectorized & Parallelized)}
 \usage{
 calculate_credit_vectors(
   asset_data,
   rate_paths,
   prepay_model,
-  reference_key = "10"
+  reference_key = "10",
+  parallel = FALSE,
+  n_cores = NULL,
+  run_parallel = parallel
 )
 }
 \arguments{
@@ -19,6 +22,14 @@ calculate_credit_vectors(
 \item{prepay_model}{List. Prepayment model from \code{\link{prepayment_model}}}
 
 \item{reference_key}{Character. Key for the reference rate to use}
+
+\item{n_cores}{Integer. Number of cores to use for parallel processing.
+If NULL, uses all available cores minus 1.}
+
+\item{run_parallel}{Logical. Whether to use parallel processing across assets. Default is FALSE.
+Note: this parameter is named \code{run_parallel} (not \code{parallel}) to avoid
+shadowing the \code{parallel} package namespace. For backward compatibility,
+\code{parallel} is also accepted.}
 }
 \value{
 A list containing:
@@ -29,4 +40,6 @@ A list containing:
 \description{
 Calculates prepayment and default rates for cash flow projection
 based on the prepayment model, asset characteristics, and interest rate paths.
+This version replaces nested for-loops with vectorized matrix operations and
+supports optional parallel processing across assets via the \code{parallel} package.
 }
