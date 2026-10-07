@@ -15,9 +15,14 @@
 
 ## Installation
 
+Neither `oasr` nor its `dnsr` dependency is on CRAN, and `oasr` does not
+declare a `Remotes:` field, so install `dnsr` first — otherwise the `oasr`
+install fails looking for `dnsr` on CRAN:
+
 ```r
-# Install development version from GitHub
-devtools::install_github("ambientpointcorp/oasr")
+# install.packages("remotes")
+remotes::install_github("ambientpointcorp/dnsr")
+remotes::install_github("ambientpointcorp/oasr")
 ```
 
 ## Usage
@@ -134,6 +139,44 @@ sim_params <- dnsr::dns_dynamics_to_sim_params(dynamics)
 rate_paths <- simulate_rates(sim_params, n_paths = 100)
 ```
 
+## Main Functions
+
+| Area | Functions |
+| :--- | :--- |
+| Rate paths | `simulate_rates()`, `extract_reference_rates()`, `get_discount_factors()` |
+| Prepayment and credit | `prepayment_model()`, `psa_prepayment_model()`, `survival_prepayment_model()`, `custom_prepayment_model()`, `calculate_credit_vectors()` |
+| Cashflows | `project_cashflows()`, `project_cashflows_with_io()`, `aggregate_cashflows()` |
+| Valuation | `calculate_present_value()`, `calculate_price()`, `calculate_average_life()` |
+| Spreads | `calculate_oas()`, `binary_search_oas()`, `calculate_z_spread()`, `calculate_option_cost()` |
+| Risk | `calculate_duration_convexity()`, `run_oas_sensitivity()`, `create_oas_surface()` |
+| Output | `create_oas_report()`, `plot_cashflows()`, `plot_prepayment_rates()`, `plot_rate_paths()`, `plot_yield_curves()`, `plot_yield_surface()` |
+
+`oas_result`, `oas_sensitivity`, and `oas_surface` objects carry `print()`,
+`plot()`, and (for `oas_result`) `summary()` methods.
+
+## Citation
+
+If you use `oasr` in your research, please cite:
+
+```
+@Manual{,
+  title = {oasr: Option-Adjusted Spread Analysis for Fixed Income Securities},
+  author = {Ariel R. H.},
+  year = {2025},
+  note = {R package version 0.1.0},
+  url = {https://github.com/ambientpointcorp/oasr},
+}
+```
+
+## Related
+
+- [`dnsr`](https://github.com/ambientpointcorp/dnsr) — the Dynamic
+  Nelson-Siegel term structure model this package builds its rate paths on.
+- *Monte Carlo Fair Value Analysis for Loan Pools* — develops the cashflow
+  projection, Monte Carlo valuation, and OAS methodology this package
+  implements. Its worked examples run on `oasr`; the chapter code is at
+  [mc-fair-value-book](https://github.com/ambientpointcorp/mc-fair-value-book).
+
 ## License
 
-This package is licensed under the MIT License.
+MIT © Ambient Point Corp. See `LICENSE` for the full text.
