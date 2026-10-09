@@ -65,7 +65,7 @@ test_that("project_cashflows produces valid output", {
   credit_vectors <- test_data$credit_vectors
   
   # Project cash flows
-  cashflows <- project_cashflows(asset_data, credit_vectors)
+  cashflows <- project_cashflows(asset_data, credit_vectors, on_short_horizon = "silent")
   
   # Check structure
   expect_type(cashflows, "list")
@@ -84,7 +84,8 @@ test_that("project_cashflows produces valid output", {
   
   # Test with specific n_periods
   max_periods <- 12
-  cashflows2 <- project_cashflows(asset_data, credit_vectors, n_periods = max_periods)
+  cashflows2 <- project_cashflows(asset_data, credit_vectors, n_periods = max_periods,
+                                 on_short_horizon = "silent")
   
   # Check dimensions of first path's cashflow array with max_periods
   expect_equal(dim(cashflows2[[1]]), c(max_periods, n_components, n_assets))
@@ -131,7 +132,7 @@ test_that("aggregate_cashflows correctly handles deal structure", {
   deal_structure <- test_data$deal_structure
   
   # Project cash flows
-  cashflows <- project_cashflows(asset_data, credit_vectors)
+  cashflows <- project_cashflows(asset_data, credit_vectors, on_short_horizon = "silent")
   
   # Aggregate cash flows
   bond_cashflows <- aggregate_cashflows(cashflows, asset_data, deal_structure)
@@ -192,7 +193,7 @@ test_that("calculate_average_life works correctly", {
   credit_vectors <- test_data$credit_vectors
   
   # Project cash flows
-  cashflows <- project_cashflows(asset_data, credit_vectors)
+  cashflows <- project_cashflows(asset_data, credit_vectors, on_short_horizon = "silent")
   
   # Calculate WAL
   wal_result <- calculate_average_life(cashflows, asset_level = TRUE)

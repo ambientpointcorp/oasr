@@ -86,6 +86,14 @@ previous release bit for bit.
 
 * `aggregate_cashflows()` and `plot_prepayment_rates()` no longer fail on
   one-asset pools, where the `[t, , ]` slice collapsed to a vector.
+* `create_oas_report()` works. Two separate faults had to clear before it
+  could: the data file path was recovered from the generated chunk text by a
+  greedy regex that left a trailing quote on the filename, and the parameter
+  table was built with `sapply()`, which returns a list when
+  `seasonal_factors` is twelve long and every other element is one, after
+  which `data.frame()` expanded that list into columns and demanded twelve
+  rows against nine names. The second only shows once the first is fixed and
+  pandoc is present, so it had never been reached.
 * `create_oas_report()` can find its own data file. The path was recovered from
   the generated chunk text by a greedy regex that left a trailing quote on the
   filename, so rendering always failed.
