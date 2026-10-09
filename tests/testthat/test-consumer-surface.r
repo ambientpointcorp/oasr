@@ -212,3 +212,28 @@ test_that("create_oas_report renders end to end", {
   expect_true(file.exists(path))
   expect_gt(file.size(path), 0)
 })
+
+test_that("the names oasr shares with dnsr are the two already known", {
+  skip_if_not_installed("dnsr")
+
+  # Attaching both packages makes whichever came second win, silently, and
+  # these two take different arguments in each. The vignette and README reach
+  # dnsr through dnsr:: rather than attaching it. This test is an alarm for a
+  # third collision appearing, not a check on the two that exist.
+  collisions <- sort(intersect(getNamespaceExports("dnsr"),
+                               getNamespaceExports("oasr")))
+  expect_equal(collisions, c("plot_yield_curves", "plot_yield_surface"))
+})
+
+test_that("the vignette does not attach dnsr", {
+  vignette_path <- system.file("doc", "introduction-to-oasr.Rmd", package = "oasr")
+  if (!nzchar(vignette_path)) {
+    vignette_path <- testthat::test_path("..", "..", "vignettes",
+                                         "introduction-to-oasr.Rmd")
+  }
+  skip_if_not(file.exists(vignette_path), "vignette source not available")
+
+  src <- readLines(vignette_path, warn = FALSE)
+  expect_false(any(grepl("^\\s*library\\(dnsr\\)", src)),
+               info = "attaching dnsr masks oasr's two plotting functions")
+})

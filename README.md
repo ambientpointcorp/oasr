@@ -40,7 +40,6 @@ dropped.
 
 ```r
 library(oasr)
-library(dnsr)
 
 # Load sample data
 data(sample_abs_data)
@@ -84,7 +83,6 @@ plot(sensitivity)
 
 ```r
 library(oasr)
-library(dnsr)
 
 # Load sample data
 data(sample_abs_data)
@@ -130,7 +128,6 @@ The package relies on the `dnsr` package for interest rate modeling:
 
 ```r
 library(oasr)
-library(dnsr)
 
 # Get Treasury yield data
 yield_data <- dnsr::get_treasury_yield_combined("2020-01-01")
@@ -162,6 +159,23 @@ rate_paths <- simulate_rates(sim_params, n_paths = 100)
 
 `oas_result`, `oas_sensitivity`, and `oas_surface` objects carry `print()`,
 `plot()`, and (for `oas_result`) `summary()` methods.
+
+### A note on attaching `dnsr`
+
+`dnsr` exports `plot_yield_curves()` and `plot_yield_surface()` of its own,
+and so does `oasr`. Attaching both with `library()` means whichever is
+attached second wins, silently, and the two take different arguments:
+
+```r
+library(oasr)
+library(dnsr)
+plot_yield_curves(rate_paths, time_points = c(0, 1, 5))
+#> Error: unused arguments (time_points = c(0, 1, 5))
+```
+
+Reach for `dnsr` through `dnsr::` rather than attaching it, or qualify the
+plotting calls as `oasr::plot_yield_curves()`. Everything else in the two
+packages has distinct names.
 
 ## Conventions
 

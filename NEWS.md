@@ -130,6 +130,14 @@ previous release bit for bit.
 
 ## Documentation and packaging
 
+* The vignette and README no longer attach `dnsr`. It exports
+  `plot_yield_curves()` and `plot_yield_surface()` of its own, so attaching it
+  after `oasr` masked both, and a vignette chunk calling `oasr`'s signature
+  against `dnsr`'s function failed with `unused arguments`. Every `dnsr` call
+  in either document was already `dnsr::` qualified, so nothing needed it
+  attached. The collision is documented in the README, and a test fails if a
+  third shared name ever appears.
+
 * `oasr-package.R` moved into `R/`, where roxygen reads it. Its import
   directives had never been applied.
 * `rmarkdown` is no longer imported into the namespace while sitting in

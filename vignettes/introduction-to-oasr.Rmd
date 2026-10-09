@@ -40,8 +40,11 @@ devtools::install_github("ambientpointcorp/oasr")
 
 ```{r setup}
 library(oasr)
-library(dnsr)  # For interest rate modeling
 library(ggplot2)  # For visualization enhancements
+
+# dnsr is deliberately not attached. It exports plot_yield_curves() and
+# plot_yield_surface() of its own, which would mask oasr's: call dnsr through
+# dnsr:: instead, as below.
 ```
 
 ## Load Sample Data
