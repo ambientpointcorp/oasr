@@ -4,7 +4,7 @@
 \alias{plot_rate_paths}
 \title{Plot Rate Paths}
 \usage{
-plot_rate_paths(rate_paths, maturity = "10", sample_size = 10)
+plot_rate_paths(rate_paths, maturity = "10", sample_size = 10, seed = NULL)
 }
 \arguments{
 \item{rate_paths}{List. The result from \code{\link{simulate_rates}}}
@@ -12,6 +12,8 @@ plot_rate_paths(rate_paths, maturity = "10", sample_size = 10)
 \item{maturity}{Character. Which maturity to plot (e.g., "10" for 10-year)}
 
 \item{sample_size}{Integer. Number of paths to sample}
+
+\item{seed}{Integer. Optional seed for the path sample, so the plot reproduces}
 }
 \value{
 A ggplot object

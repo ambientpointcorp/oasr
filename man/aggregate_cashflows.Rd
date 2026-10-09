@@ -21,7 +21,7 @@ aggregate_cashflows(
 
 \item{verbose}{Logical. Whether to print verbose output}
 
-\item{reference_rates}{Matrix. Optional reference rate matrix with dimensions \link{n_paths, n_periods}
+\item{reference_rates}{Matrix. Optional reference rate matrix with dimensions \verb{[n_paths, n_periods]}
 for variable rate bonds, typically from \code{\link{extract_reference_rates}}.
 If NULL, fixed rates are used.}
 }

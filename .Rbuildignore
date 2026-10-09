@@ -1,2 +1,14 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^oasr-package-summary\.Rmd$
+^oasr-structure\.txt$
+^tests/test-summary\.md$
+^docs$
+^\.DS_Store$
+\.DS_Store$
+^LICENSE\.md$
+^figure$
+^\.github$
+^tools$
+^\.positai$
+^\.claude$

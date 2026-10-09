@@ -13,7 +13,13 @@ calculate_oas(
   search_range = c(-500, 500),
   tolerance = 0.01,
   max_iterations = 50,
-  verbose = TRUE
+  verbose = TRUE,
+  reference_key = "10",
+  discounting = c("path", "spot"),
+  accrual_method = "30/360",
+  start_date = NULL,
+  terminal_balance = c("return", "drop"),
+  recovery_basis = c("defaults", "balance")
 )
 }
 \arguments{
@@ -34,6 +40,29 @@ calculate_oas(
 \item{max_iterations}{Integer. Maximum number of iterations for the search}
 
 \item{verbose}{Logical. Whether to print progress information}
+
+\item{reference_key}{Character. Key of the reference rate used for credit
+vectors, discounting, and as the index for any variable rate loans or
+floating rate bonds. Defaults to the 10-year.}
+
+\item{discounting}{Character. Passed to \code{\link{calculate_present_value}}:
+\code{"path"} compounds the short rate along each path, \code{"spot"}
+reproduces the earlier behaviour.}
+
+\item{accrual_method}{Character. Day-count convention passed to
+\code{\link{project_cashflows}} when the asset data carries no
+\code{accrual_method} or \code{Accrual} column of its own.}
+
+\item{start_date}{Date. Anchor for the payment schedule, needed by the ACT
+conventions. Passed to \code{\link{project_cashflows}}.}
+
+\item{terminal_balance}{Character. Passed to \code{\link{project_cashflows}}:
+whether the balance outstanding at the horizon is returned as a final
+cash flow or dropped.}
+
+\item{recovery_basis}{Character. Passed to \code{\link{project_cashflows}}:
+whether recovery is taken on the amount that defaulted or on the
+balance standing at the time.}
 }
 \value{
 A list containing the OAS calculation results

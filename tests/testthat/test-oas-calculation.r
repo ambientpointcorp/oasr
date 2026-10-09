@@ -1,4 +1,3 @@
-context("OAS Calculation Functions")
 
 # Create minimal mock data for testing
 setup_minimal_test_data <- function() {
@@ -7,9 +6,9 @@ setup_minimal_test_data <- function() {
     asset_id = c("A001"),
     balance = c(100000),
     wac = c(0.05),
-    wam = c(360),
+    servicing = c(0.005),
+    term = c(360),
     age = c(0),
-    market_price = c(100.0),
     stringsAsFactors = FALSE
   )
   
@@ -69,21 +68,18 @@ test_that("binary_search_oas finds OAS for fixed cash flows", {
     maturities = as.numeric(maturities)
   )
   
-  # Calculate present value with 0 OAS
-  market_price <- 0  # We'll calculate this first
   search_range <- c(-500, 500)
-  
-  # Calculate price with 0 OAS
-  # This will be our "market price" to test OAS calculation
-  oas_0_result <- binary_search_oas(
+
+  # The price at zero OAS, computed directly. Solving binary_search_oas()
+  # against a target of 0 does not give that: no spread in range drives the
+  # price to zero, so it returns the price at the upper bound instead, and
+  # the round trip below would then recover that bound rather than zero.
+  market_price <- calculate_price(
     cashflows = cashflows,
     times = times,
-    rate_paths = rate_paths,
-    market_price = 0,  # We don't care about this for now
-    search_range = search_range
+    spot_rates = rep(0.03, length(times)),
+    spread = 0
   )
-  
-  market_price <- oas_0_result$price
   
   # Now calculate OAS with our calculated market price
   # Should return close to 0
@@ -96,7 +92,7 @@ test_that("binary_search_oas finds OAS for fixed cash flows", {
   )
   
   # Check structure
-  expect_is(oas_result, "list")
+  expect_type(oas_result, "list")
   expect_true(all(c("oas", "price", "market_price", "price_error", "converged") %in% names(oas_result)))
   
   # Check that OAS is close to 0 (within 0.1 bps)
@@ -126,7 +122,8 @@ test_that("print and summary methods for oas_result work", {
         asset_id = "A001",
         balance = 100000,
         wac = 0.05,
-        wam = 360
+        servicing = 0.005,
+        term = 360
       )
     ),
     class = c("oas_result", "list")
@@ -140,7 +137,7 @@ test_that("print and summary methods for oas_result work", {
   # Test summary method
   summary_result <- summary(oas_result)
   
-  expect_is(summary_result, "list")
+  expect_type(summary_result, "list")
   expect_true(all(c("overall", "convergence", "execution_time", "asset_info") %in% names(summary_result)))
   expect_equal(nrow(summary_result$overall), 7)
   expect_true(summary_result$convergence$converged)
@@ -202,7 +199,7 @@ test_that("calculate_oas runs without errors", {
       asset_data = test_data$asset_data,
       rate_paths = test_data$rate_paths,
       prepay_model = test_data$prepay_model,
-      market_price = test_data$asset_data$market_price,
+      market_price = 100.0,  # a security-level quote, not a loan attribute
       search_range = c(-100, 100),
       tolerance = 1,  # High tolerance for speed
       max_iterations = max_iterations,

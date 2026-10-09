@@ -8,7 +8,8 @@ plot_cashflows(
   oas_result,
   asset_idx = NULL,
   components = c("scheduled_principal", "prepayment", "interest", "recovery"),
-  average_paths = TRUE
+  average_paths = TRUE,
+  seed = NULL
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ plot_cashflows(
 \item{components}{Character vector. Which cash flow components to include}
 
 \item{average_paths}{Logical. Whether to average across paths}
+
+\item{seed}{Integer. Optional seed for the path sample, so the plot reproduces}
 }
 \value{
 A ggplot object

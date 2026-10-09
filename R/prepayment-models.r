@@ -18,10 +18,12 @@
 #'
 #' @examples
 #' # Basic CPR/CDR model
-#' model1 <- prepayment_model(type = "cpr_cdr", base_cpr = 0.06, base_cdr = 0.01, recovery_rate = 0.65)
+#' model1 <- prepayment_model(type = "cpr_cdr", base_cpr = 0.06,
+#'                            base_cdr = 0.01, recovery_rate = 0.65)
 #'
 #' # PSA model
-#' model2 <- prepayment_model(type = "psa", psa_multiplier = 1.0, base_cdr = 0.01, recovery_rate = 0.65)
+#' model2 <- prepayment_model(type = "psa", psa_multiplier = 1.0,
+#'                            base_cdr = 0.01, recovery_rate = 0.65)
 #'
 #' @export
 prepayment_model <- function(type = "cpr_cdr",
@@ -142,8 +144,11 @@ prepayment_model <- function(type = "cpr_cdr",
     # Per-period scalar multiplier: [n_periods]
     time_multiplier <- prepay_model$base_cpr * seasoning_effect * seasonal_effect
 
-    # CPR [n_paths x n_periods]
+    # CPR [n_paths x n_periods]. Clamped below 1 so the annual-to-monthly
+    # conversion cannot take the root of a negative number; values already
+    # under the cap pass through untouched.
     cpr <- sweep(burnout_effect * (1 + refi_component), 2, time_multiplier, `*`)
+    cpr <- pmin(cpr, 1 - 1e-12)
 
     # CDR: scalar per asset
     cdr_scalar <- prepay_model$base_cdr *
@@ -161,143 +166,7 @@ prepayment_model <- function(type = "cpr_cdr",
     # ------------------------------------------------------------------
 
     base_psa_cpr <- pmin(0.06, 0.002 * current_ages)
-    cpr <- base_psa_cpr * prepay_model$psa_multiplier
-
-    cdr_scalar <- prepay_model$base_cdr *
-      (1 + max(0, (asset_ltv - 0.8) * 2)) *
-      (1 - min(1, (asset_fico - 620) / 200))
-
-    smm <- 1 - (1 - cpr)^(1/12)
-    mdr_scalar <- 1 - (1 - cdr_scalar)^(1/12)
-
-    prepay_mat  <- matrix(smm, nrow = n_paths, ncol = n_periods, byrow = TRUE)
-    default_mat <- matrix(mdr_scalar, nrow = n_paths, ncol = n_periods)
-
-  } else if (prepay_model$type == "survival") {
-    # ------------------------------------------------------------------
-    # Survival model — vectorized
-    # ------------------------------------------------------------------
-
-    prepay_hazard <- prepay_model$prepay_hazard *
-      exp(-prepay_model$seasoning * current_ages / 120)
-
-    default_hazard_scalar <- prepay_model$default_hazard *
-      (1 + max(0, (asset_ltv - 0.8) * 2)) *
-      (1 - min(1, (asset_fico - 620) / 200))
-
-    prepay_mat  <- matrix(prepay_hazard, nrow = n_paths, ncol = n_periods, byrow = TRUE)
-    default_mat <- matrix(default_hazard_scalar, nrow = n_paths, ncol = n_periods)
-
-  } else if (prepay_model$type == "custom") {
-    # ------------------------------------------------------------------
-    # Custom model — delegate to user function
-    # ------------------------------------------------------------------
-    asset <- asset_data[i, ]
-    result <- prepay_model$custom_fn(
-      asset = asset,
-      reference_rates = reference_rates,
-      n_paths = n_paths,
-      n_periods = n_periods
-    )
-
-    if (!all(c("prepay_rates", "default_rates", "recovery_rates") %in% names(result))) {
-      stop("Custom function must return a list with prepay_rates, default_rates, and recovery_rates")
-    }
-
-    return(list(
-      prepay_mat   = result$prepay_rates,
-      default_mat  = result$default_rates,
-      recovery_mat = result$recovery_rates
-    ))
-  }
-
-  # --- Recovery rates: shift defaults forward by recovery_lag ---
-  recovery_mat <- matrix(0, nrow = n_paths, ncol = n_periods)
-  if (recovery_lag > 0 && recovery_lag < n_periods) {
-    src_cols <- seq_len(n_periods - recovery_lag)
-    dst_cols <- src_cols + recovery_lag
-    recovery_mat[, dst_cols] <- default_mat[, src_cols] * prepay_model$recovery_rate
-  } else if (recovery_lag == 0) {
-    recovery_mat <- default_mat * prepay_model$recovery_rate
-  }
-
-  list(
-    prepay_mat   = prepay_mat,
-    default_mat  = default_mat,
-    recovery_mat = recovery_mat
-  )
-}
-
-#' @title Vectorized Per-Asset Credit Vector Computation (Internal)
-#' @description Computes prepay/default/recovery matrices for a single asset.
-#'   Defined at the top level so it carries no closure environment and can be
-#'   safely serialized to parallel worker nodes.
-#'
-#' @keywords internal
-#' @noRd
-.compute_asset_vectors <- function(i, asset_ages, asset_wacs, asset_ltvs, asset_ficos,
-                                   asset_data, reference_rates, prepay_model,
-                                   t_vec, n_paths, n_periods, recovery_lag) {
-
-  asset_age  <- asset_ages[i]
-  asset_wac  <- asset_wacs[i]
-  asset_ltv  <- asset_ltvs[i]
-  asset_fico <- asset_ficos[i]
-
-  # Current ages across time: vector of length n_periods
-  current_ages <- asset_age + t_vec - 1
-
-  if (prepay_model$type == "cpr_cdr") {
-    # ------------------------------------------------------------------
-    # CPR/CDR model — fully vectorized over paths and time
-    # ------------------------------------------------------------------
-
-    # Refinancing incentive: depends on reference_rates [n_paths x n_periods]
-    rate_spread <- 0.015
-    market_rate <- reference_rates + rate_spread
-    refi_incentive <- asset_wac - market_rate
-
-    # S-curve refinancing component: [n_paths x n_periods]
-    refi_component <- ifelse(
-      refi_incentive <= 0,
-      0.0,
-      0.2 * tanh(prepay_model$rate_sensitivity * refi_incentive)
-    )
-
-    # Seasoning effect: vector of length n_periods
-    seasoning_effect <- pmin(1, current_ages / 30) *
-      exp(-prepay_model$seasoning * pmax(0, current_ages - 60) / 120)
-
-    # Burnout effect: [n_paths x n_periods]
-    burnout_effect <- exp(-prepay_model$burnout_factor * pmax(0, refi_incentive))
-
-    # Seasonal effect: vector of length n_periods
-    month_of_year <- (t_vec - 1) %% 12 + 1
-    seasonal_effect <- prepay_model$seasonal_factors[month_of_year]
-
-    # Per-period scalar multiplier: [n_periods]
-    time_multiplier <- prepay_model$base_cpr * seasoning_effect * seasonal_effect
-
-    # CPR [n_paths x n_periods]
-    cpr <- sweep(burnout_effect * (1 + refi_component), 2, time_multiplier, `*`)
-
-    # CDR: scalar per asset
-    cdr_scalar <- prepay_model$base_cdr *
-      (1 + max(0, (asset_ltv - 0.8) * 2)) *
-      (1 - min(1, (asset_fico - 620) / 200))
-
-    # Convert annual rates to monthly
-    prepay_mat  <- 1 - (1 - cpr)^(1/12)
-    mdr_scalar  <- 1 - (1 - cdr_scalar)^(1/12)
-    default_mat <- matrix(mdr_scalar, nrow = n_paths, ncol = n_periods)
-
-  } else if (prepay_model$type == "psa") {
-    # ------------------------------------------------------------------
-    # PSA model — vectorized
-    # ------------------------------------------------------------------
-
-    base_psa_cpr <- pmin(0.06, 0.002 * current_ages)
-    cpr <- base_psa_cpr * prepay_model$psa_multiplier
+    cpr <- pmin(base_psa_cpr * prepay_model$psa_multiplier, 1 - 1e-12)
 
     cdr_scalar <- prepay_model$base_cdr *
       (1 + max(0, (asset_ltv - 0.8) * 2)) *
@@ -375,6 +244,8 @@ prepayment_model <- function(type = "cpr_cdr",
 #' @param rate_paths List. Result from \code{\link{simulate_rates}}
 #' @param prepay_model List. Prepayment model from \code{\link{prepayment_model}}
 #' @param reference_key Character. Key for the reference rate to use
+#' @param parallel Logical. Deprecated spelling of \code{run_parallel}, kept
+#'        because existing callers pass it. Prefer \code{run_parallel}.
 #' @param run_parallel Logical. Whether to use parallel processing across assets. Default is FALSE.
 #'        Note: this parameter is named \code{run_parallel} (not \code{parallel}) to avoid
 #'        shadowing the \code{parallel} package namespace. For backward compatibility,
@@ -383,9 +254,9 @@ prepayment_model <- function(type = "cpr_cdr",
 #'        If NULL, uses all available cores minus 1.
 #'
 #' @return A list containing:
-#'   \item{prepay_rates}{Array of prepayment rates with dimensions [path, time, asset]}
-#'   \item{default_rates}{Array of default rates with dimensions [path, time, asset]}
-#'   \item{recovery_rates}{Array of recovery rates with dimensions [path, time, asset]}
+#'   \item{prepay_rates}{Array of prepayment rates with dimensions `[path, time, asset]`}
+#'   \item{default_rates}{Array of default rates with dimensions `[path, time, asset]`}
+#'   \item{recovery_rates}{Array of recovery rates with dimensions `[path, time, asset]`}
 #'
 #' @export
 calculate_credit_vectors <- function(asset_data, rate_paths, prepay_model,
@@ -496,7 +367,11 @@ calculate_credit_vectors <- function(asset_data, rate_paths, prepay_model,
   return(list(
     prepay_rates   = prepay_rates,
     default_rates  = default_rates,
-    recovery_rates = recovery_rates
+    recovery_rates = recovery_rates,
+    # Carried so the projection can take recovery on the amount that actually
+    # defaulted, rather than on the whole balance standing at the time.
+    recovery_rate  = prepay_model$recovery_rate,
+    recovery_lag   = recovery_lag
   ))
 }
 

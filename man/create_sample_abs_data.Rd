@@ -2,11 +2,16 @@
 % Please edit documentation in R/data.r
 \name{create_sample_abs_data}
 \alias{create_sample_abs_data}
-\title{Create Sample ABS Data}
+\title{Create Sample Loan-Level Data}
 \usage{
 create_sample_abs_data()
 }
+\value{
+A data frame of twelve loans.
+}
 \description{
-Internal function to create sample ABS data for the package
+Internal generator for \code{\link{sample_abs_data}}. Kept in the package so
+the dataset can be regenerated and so the amortisation that produces
+\code{balance} is on the record.
 }
 \keyword{internal}

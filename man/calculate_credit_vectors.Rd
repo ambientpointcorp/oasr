@@ -23,6 +23,9 @@ calculate_credit_vectors(
 
 \item{reference_key}{Character. Key for the reference rate to use}
 
+\item{parallel}{Logical. Deprecated spelling of \code{run_parallel}, kept
+because existing callers pass it. Prefer \code{run_parallel}.}
+
 \item{n_cores}{Integer. Number of cores to use for parallel processing.
 If NULL, uses all available cores minus 1.}
 
@@ -33,9 +36,9 @@ shadowing the \code{parallel} package namespace. For backward compatibility,
 }
 \value{
 A list containing:
-\item{prepay_rates}{Array of prepayment rates with dimensions \link{path, time, asset}}
-\item{default_rates}{Array of default rates with dimensions \link{path, time, asset}}
-\item{recovery_rates}{Array of recovery rates with dimensions \link{path, time, asset}}
+\item{prepay_rates}{Array of prepayment rates with dimensions \verb{[path, time, asset]}}
+\item{default_rates}{Array of default rates with dimensions \verb{[path, time, asset]}}
+\item{recovery_rates}{Array of recovery rates with dimensions \verb{[path, time, asset]}}
 }
 \description{
 Calculates prepayment and default rates for cash flow projection

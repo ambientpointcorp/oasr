@@ -3,22 +3,29 @@
 \docType{data}
 \name{sample_deal_structure}
 \alias{sample_deal_structure}
-\title{Sample Structured Deal Data for OAS Analysis}
+\title{Sample Structured Deal for OAS Analysis}
 \format{
 A list with two components:
 \describe{
-\item{bonds}{A data frame with bond information}
-\item{waterfall}{A list with waterfall rules}
+\item{bonds}{A data frame of bond_id, balance and coupon, senior first}
+\item{waterfall}{A list of the principal, interest and loss rules}
 }
 }
 \usage{
 sample_deal_structure
 }
 \description{
-A dataset containing a sample structured deal for demonstration and testing purposes.
+A three-tranche sequential-pay deal sized to the pool in
+\code{\link{sample_abs_data}}: the bond balances sum to the pool's current
+balance, so the structure can be passed to \code{\link{aggregate_cashflows}}
+or to \code{\link{calculate_oas}} as \code{deal_structure} without rescaling.
 }
 \examples{
 data(sample_deal_structure)
 str(sample_deal_structure)
+
+# the tranches are sized to the pool
+data(sample_abs_data)
+sum(sample_deal_structure$bonds$balance) == round(sum(sample_abs_data$balance), 2)
 }
 \keyword{datasets}

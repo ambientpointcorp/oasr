@@ -3,33 +3,50 @@
 \docType{data}
 \name{sample_abs_data}
 \alias{sample_abs_data}
-\title{Sample ABS Data for OAS Analysis}
+\title{Sample Loan-Level Data for OAS Analysis}
 \format{
-A data frame with 5 rows and 7 variables:
+A data frame with 12 rows and 14 variables:
 \describe{
-\item{asset_id}{Asset identifier}
-\item{balance}{Current balance of the asset (in dollars)}
-\item{wac}{Weighted average coupon rate (annual, in decimal)}
-\item{servicing}{Servicing fee (annual, in decimal)}
-\item{wam}{Weighted average maturity (in months)}
-\item{age}{Current age of the asset (in months)}
-\item{ltv}{Loan-to-value ratio (in decimal)}
-\item{fico}{FICO credit score of the borrower}
-\item{state}{State where the property is located}
-\item{property_type}{Type of property (SFR = Single Family Residence, etc.)}
-\item{occupancy_type}{Occupancy type (PRIMARY, INVESTMENT, etc.)}
-\item{market_price}{Market price as a percentage of face value}
+\item{asset_id}{Loan identifier}
+\item{original_balance}{Balance at origination (dollars)}
+\item{balance}{Current balance (dollars), amortised from origination}
+\item{wac}{Note rate (annual, decimal)}
+\item{servicing}{Servicing fee (annual, decimal)}
+\item{io_strip}{Interest-only strip (annual, decimal)}
+\item{accrual_method}{Day-count convention for interest accrual. All
+twelve loans are \code{"30/360"}, the convention the projection engine
+applies today}
+\item{term}{Original amortisation term (months)}
+\item{age}{Months elapsed since origination}
+\item{ltv}{Loan-to-value ratio (decimal)}
+\item{fico}{Borrower FICO score}
+\item{state}{State of the property}
+\item{property_type}{SFR, CONDO or MULTI}
+\item{occupancy_type}{PRIMARY, INVESTMENT or SECOND_HOME}
 }
 }
 \usage{
 sample_abs_data
 }
 \description{
-A dataset containing sample asset-backed securities (ABS) for demonstration
-and testing purposes.
+A loan-level dataset of twelve fixed-rate mortgages, for demonstration and
+testing. Every column is an attribute of an individual loan, so the frame can
+be passed straight to \code{\link{project_cashflows}} and
+\code{\link{calculate_oas}} with no preparation.
+}
+\details{
+\code{balance} is derived by amortising \code{original_balance} over
+\code{age} months at \code{wac}, so \code{original_balance}, \code{balance},
+\code{term} and \code{age} are mutually consistent. The loans span the
+kinks in the default model -- four have \code{ltv} above 0.80 and one has
+\code{fico} below 620 -- and every remaining term (\code{term - age}) is at
+most 354 months, so a 360-month projection captures the pool in full.
 }
 \examples{
 data(sample_abs_data)
 head(sample_abs_data)
+
+# balance is the amortised balance, not a free parameter
+with(sample_abs_data, all(balance <= original_balance))
 }
 \keyword{datasets}

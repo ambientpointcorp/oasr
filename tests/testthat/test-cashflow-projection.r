@@ -1,4 +1,3 @@
-context("Cash Flow Projection Functions")
 
 # Setup mock asset data, credit vectors, and deal structure
 setup_test_data <- function() {
@@ -7,7 +6,8 @@ setup_test_data <- function() {
     asset_id = c("A001", "A002"),
     balance = c(200000, 150000),
     wac = c(0.055, 0.048),
-    wam = c(300, 280),
+    servicing = c(0.005, 0.004),
+    term = c(360, 320),
     age = c(60, 40),
     ltv = c(0.75, 0.68),
     fico = c(720, 760),
@@ -68,13 +68,13 @@ test_that("project_cashflows produces valid output", {
   cashflows <- project_cashflows(asset_data, credit_vectors)
   
   # Check structure
-  expect_is(cashflows, "list")
+  expect_type(cashflows, "list")
   
   # Get dimensions
   n_paths <- dim(credit_vectors$prepay_rates)[1]
   n_periods <- dim(credit_vectors$prepay_rates)[2]
   n_assets <- dim(credit_vectors$prepay_rates)[3]
-  n_components <- 8  # Components in cashflow array
+  n_components <- 9  # Components in cashflow array
   
   # Check dimensions of first path's cashflow array
   expect_equal(dim(cashflows[[1]]), c(n_periods, n_components, n_assets))
@@ -112,9 +112,11 @@ test_that("project_cashflows produces valid output", {
     expect_true(path1_cf[1, 2, a] > 0)  # Scheduled principal
     expect_true(path1_cf[1, 7, a] > 0)  # Interest
     
-    # Total payment should equal sum of components
-    components_sum <- path1_cf[1, 2, a] + path1_cf[1, 3, a] + path1_cf[1, 6, a] + path1_cf[1, 7, a]
-    expect_equal(path1_cf[1, 8, a], components_sum)
+    # Total payment is cash to the investor, so servicing (component 8) is a
+    # deduction, not an addition.
+    components_sum <- path1_cf[1, 2, a] + path1_cf[1, 3, a] + path1_cf[1, 6, a] +
+      path1_cf[1, 7, a] - path1_cf[1, 8, a]
+    expect_equal(path1_cf[1, 9, a], components_sum)
   }
 })
 
@@ -135,7 +137,7 @@ test_that("aggregate_cashflows correctly handles deal structure", {
   bond_cashflows <- aggregate_cashflows(cashflows, asset_data, deal_structure)
   
   # Check structure
-  expect_is(bond_cashflows, "list")
+  expect_type(bond_cashflows, "list")
   
   # Get dimensions
   n_paths <- dim(credit_vectors$prepay_rates)[1]
@@ -196,7 +198,7 @@ test_that("calculate_average_life works correctly", {
   wal_result <- calculate_average_life(cashflows, asset_level = TRUE)
   
   # Check structure
-  expect_is(wal_result, "list")
+  expect_type(wal_result, "list")
   expect_true(all(c("avg_lives", "avg_lives_by_path") %in% names(wal_result)))
   
   # Get dimensions
@@ -204,14 +206,14 @@ test_that("calculate_average_life works correctly", {
   n_assets <- dim(credit_vectors$prepay_rates)[3]
   
   # Check dimensions
-  expect_equal(length(wal_result$avg_lives), n_assets)
+  expect_equal(length(wal_result$avg_lives$by_asset), n_assets)
   expect_equal(dim(wal_result$avg_lives_by_path), c(n_paths, n_assets))
   
   # Check that WAL values are reasonable
   # For a standard mortgage, WAL should be less than the original term
   for (a in 1:n_assets) {
-    original_term <- asset_data$wam[a] / 12  # Convert to years
-    expect_true(wal_result$avg_lives[a] < original_term)
+    original_term <- (asset_data$term[a] - asset_data$age[a]) / 12  # remaining, in years
+    expect_true(wal_result$avg_lives$by_asset[a] < original_term)
   }
   
   # Test with bond-level cashflows
@@ -220,13 +222,13 @@ test_that("calculate_average_life works correctly", {
   bond_wal <- calculate_average_life(bond_cashflows, asset_level = FALSE, principal_idx = 2)
   
   # Check structure for bond WAL
-  expect_is(bond_wal, "list")
+  expect_type(bond_wal, "list")
   expect_true(all(c("avg_lives", "avg_lives_by_path") %in% names(bond_wal)))
   
   # Get dimensions
   n_bonds <- nrow(deal_structure$bonds)
   
   # Check dimensions
-  expect_equal(length(bond_wal$avg_lives), n_bonds)
+  expect_equal(length(bond_wal$avg_lives$by_asset), n_bonds)
   expect_equal(dim(bond_wal$avg_lives_by_path), c(n_paths, n_bonds))
 })

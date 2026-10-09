@@ -6,7 +6,12 @@
 \usage{
 create_sample_deal_structure()
 }
+\value{
+A list with bonds and waterfall components.
+}
 \description{
-Internal function to create sample deal structure for the package
+Internal generator for \code{\link{sample_deal_structure}}. Sizes the
+tranches off \code{\link{create_sample_abs_data}} so the two datasets cannot
+drift apart.
 }
 \keyword{internal}

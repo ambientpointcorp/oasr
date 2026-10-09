@@ -50,9 +50,11 @@ Supports multiple model types including CPR/CDR-based models and time-to-event s
 }
 \examples{
 # Basic CPR/CDR model
-model1 <- prepayment_model(type = "cpr_cdr", base_cpr = 0.06, base_cdr = 0.01, recovery_rate = 0.65)
+model1 <- prepayment_model(type = "cpr_cdr", base_cpr = 0.06,
+                           base_cdr = 0.01, recovery_rate = 0.65)
 
 # PSA model
-model2 <- prepayment_model(type = "psa", psa_multiplier = 1.0, base_cdr = 0.01, recovery_rate = 0.65)
+model2 <- prepayment_model(type = "psa", psa_multiplier = 1.0,
+                           base_cdr = 0.01, recovery_rate = 0.65)
 
 }

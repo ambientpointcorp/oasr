@@ -1,6 +1,6 @@
 Package: oasr
 Title: Option-Adjusted Spread Analysis for Fixed Income Securities
-Version: 0.1.0
+Version: 0.1.0.9000
 Authors@R: 
     person("Ariel", "R. H.", email = "ariel@ambientpointcorp.com", role = c("aut", "cre"))
 Description: A comprehensive toolkit for option-adjusted spread (OAS) analysis 
@@ -17,18 +17,21 @@ RoxygenNote: 7.3.2
 Imports: 
     dnsr (>= 0.7.0),
     ggplot2,
-    reshape2,
-    dplyr,
     stats,
     parallel,
-    methods,
     utils,
     checkmate
 Suggests: 
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    plotly,
+    lattice,
+    mockery
+VignetteBuilder: knitr
 Config/testthat/edition: 3
 Depends: 
     R (>= 2.10)
 LazyData: true
+Remotes: 
+    ambientpointcorp/dnsr

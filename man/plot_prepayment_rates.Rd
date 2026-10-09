@@ -8,7 +8,8 @@ plot_prepayment_rates(
   oas_result,
   asset_idx = NULL,
   type = "both",
-  sample_paths = 5
+  sample_paths = 5,
+  seed = NULL
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ plot_prepayment_rates(
 \item{type}{Character. Type of prepayment to plot: "prepay", "default", "both"}
 
 \item{sample_paths}{Integer. Number of paths to sample}
+
+\item{seed}{Integer. Optional seed for the path sample, so the plot reproduces}
 }
 \value{
 A ggplot object or list of ggplot objects

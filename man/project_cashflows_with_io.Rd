@@ -11,7 +11,12 @@ project_cashflows_with_io(
   reference_rates = NULL,
   parallel = FALSE,
   n_cores = NULL,
-  run_parallel = parallel
+  run_parallel = parallel,
+  accrual_method = "30/360",
+  start_date = NULL,
+  on_short_horizon = c("warn", "silent", "error"),
+  terminal_balance = c("return", "drop"),
+  recovery_basis = c("defaults", "balance")
 )
 }
 \arguments{
@@ -21,7 +26,7 @@ project_cashflows_with_io(
 
 \item{n_periods}{Integer. Number of periods to project}
 
-\item{reference_rates}{Matrix. Optional reference rate matrix with dimensions \link{n_paths, n_periods}
+\item{reference_rates}{Matrix. Optional reference rate matrix with dimensions \verb{[n_paths, n_periods]}
 for variable rate loans, typically from \code{\link{extract_reference_rates}}.
 If NULL, fixed rates are used.}
 
@@ -33,9 +38,37 @@ Internally aliased to \code{run_parallel} to avoid shadowing the
 If NULL, uses all available cores minus 1.}
 
 \item{run_parallel}{Logical. Alias for \code{parallel}. Preferred in new code.}
+
+\item{accrual_method}{Character. Day-count convention used when the asset
+data carries no \code{accrual_method} and no \code{Accrual} column of
+its own: one of \code{"30/360"} (the default), \code{"ACT/365"} or
+\code{"ACT/360"}. Resolution order is the loan's
+\code{accrual_method} column, then its \code{Accrual} column, then
+this argument. \code{"30/360"} is computed as one twelfth per period,
+which is what it means for a monthly-pay amortising loan, and is
+never derived from a calendar.}
+
+\item{start_date}{Date. Anchor for the payment schedule, required by the ACT
+conventions and ignored by \code{"30/360"}. A per-loan
+\code{accrual_start_date} column takes precedence. With an ACT
+convention and no anchor the projection warns once and accrues on
+30/360.}
+
+\item{on_short_horizon}{Character. What to do when \code{n_periods} is
+shorter than the longest remaining term: \code{"warn"} (the
+default), \code{"silent"} or \code{"error"}.}
+
+\item{terminal_balance}{Character. \code{"return"}, the default, pays the
+balance outstanding when the projection stops as a final cash flow.
+\code{"drop"} discards it, which is the earlier behaviour.}
+
+\item{recovery_basis}{Character. \code{"defaults"}, the default, takes
+recovery on the amount that defaulted \code{recovery_lag} months
+earlier. \code{"balance"} takes it on the balance standing at the
+time, which is the earlier behaviour.}
 }
 \value{
-A list of cash flow arrays for each path, with dimensions \link{time, component, asset}
+A list of cash flow arrays for each path, with dimensions \verb{[time, component, asset]}
 where component is:
 \item{1}{Remaining balance}
 \item{2}{Scheduled principal}

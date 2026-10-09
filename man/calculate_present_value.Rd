@@ -10,7 +10,8 @@ calculate_present_value(
   oas,
   reference_key = "10",
   asset_level = TRUE,
-  total_idx = 9
+  total_idx = 9,
+  discounting = c("path", "spot")
 )
 }
 \arguments{
@@ -25,6 +26,12 @@ calculate_present_value(
 \item{asset_level}{Logical. Whether the cashflows are at the asset level or bond level}
 
 \item{total_idx}{Integer. Index of the total cash flow component in cashflows}
+
+\item{discounting}{Character. \code{"path"} compounds the short rate along
+each simulated path, which is the Monte Carlo definition of an
+option-adjusted spread. \code{"spot"} is the earlier behaviour: each
+cash flow discounted at the reference rate standing in its own
+period, taken as a zero rate to that maturity.}
 }
 \value{
 A list containing:

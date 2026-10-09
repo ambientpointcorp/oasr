@@ -12,7 +12,9 @@
 \item{...}{Additional arguments (not used)}
 }
 \value{
-A list with a summary of the OAS calculation
+A list with a summary of the OAS calculation. The
+\code{convergence} element holds \code{converged}, a logical, and
+\code{iterations}, an integer.
 }
 \description{
 Provides a summary of the OAS calculation result.

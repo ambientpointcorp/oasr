@@ -10,6 +10,23 @@
 #' @param tolerance Numeric. Tolerance for price convergence
 #' @param max_iterations Integer. Maximum number of iterations for the search
 #' @param verbose Logical. Whether to print progress information
+#' @param reference_key Character. Key of the reference rate used for credit
+#'        vectors, discounting, and as the index for any variable rate loans or
+#'        floating rate bonds. Defaults to the 10-year.
+#' @param discounting Character. Passed to \code{\link{calculate_present_value}}:
+#'        \code{"path"} compounds the short rate along each path, \code{"spot"}
+#'        reproduces the earlier behaviour.
+#' @param accrual_method Character. Day-count convention passed to
+#'        \code{\link{project_cashflows}} when the asset data carries no
+#'        \code{accrual_method} or \code{Accrual} column of its own.
+#' @param start_date Date. Anchor for the payment schedule, needed by the ACT
+#'        conventions. Passed to \code{\link{project_cashflows}}.
+#' @param terminal_balance Character. Passed to \code{\link{project_cashflows}}:
+#'        whether the balance outstanding at the horizon is returned as a final
+#'        cash flow or dropped.
+#' @param recovery_basis Character. Passed to \code{\link{project_cashflows}}:
+#'        whether recovery is taken on the amount that defaulted or on the
+#'        balance standing at the time.
 #'
 #' @return A list containing the OAS calculation results
 #'
@@ -29,7 +46,15 @@
 #' @export
 calculate_oas <- function(asset_data, rate_paths, prepay_model, market_price,
                          deal_structure = NULL, search_range = c(-500, 500),
-                         tolerance = 0.01, max_iterations = 50, verbose = TRUE) {
+                         tolerance = 0.01, max_iterations = 50, verbose = TRUE,
+                         reference_key = "10", discounting = c("path", "spot"),
+                         accrual_method = "30/360", start_date = NULL,
+                         terminal_balance = c("return", "drop"),
+                         recovery_basis = c("defaults", "balance")) {
+
+  discounting <- match.arg(discounting)
+  terminal_balance <- match.arg(terminal_balance)
+  recovery_basis <- match.arg(recovery_basis)
 
   # Parameter validation
   checkmate::assert_data_frame(asset_data)
@@ -49,86 +74,80 @@ calculate_oas <- function(asset_data, rate_paths, prepay_model, market_price,
   # Determine if we're working with a structured security
   structured <- !is.null(deal_structure)
 
-  # Function to calculate price given an OAS
-  price_function <- function(oas) {
+  # Reference rates are needed by variable rate loans and floating rate bonds.
+  # Resolving them here and passing them down is what makes those reachable
+  # through calculate_oas() at all.
+  reference_rates <- extract_reference_rates(rate_paths, reference_key)
+
+  # Nothing between here and the loop depends on the OAS, so it is computed
+  # once. Previously all of it sat inside the price function and was redone on
+  # every bisection iteration, which was the bulk of the run time.
+  credit_vectors <- calculate_credit_vectors(
+    asset_data = asset_data,
+    rate_paths = rate_paths,
+    prepay_model = prepay_model,
+    reference_key = reference_key
+  )
+
+  cashflows <- project_cashflows(
+    asset_data = asset_data,
+    credit_vectors = credit_vectors,
+    reference_rates = reference_rates,
+    accrual_method = accrual_method,
+    start_date = start_date,
+    terminal_balance = terminal_balance,
+    recovery_basis = recovery_basis
+  )
+
+  if (structured) {
+    aggregated_cashflows <- aggregate_cashflows(
+      cashflows = cashflows,
+      asset_data = asset_data,
+      deal_structure = deal_structure,
+      reference_rates = reference_rates
+    )
+    total_bond_balance <- sum(deal_structure$bonds$balance)
+  } else {
+    aggregated_cashflows <- NULL
+  }
+
+  avg_life_result <- calculate_average_life(
+    cashflows = cashflows,
+    asset_level = TRUE
+  )
+
+  # Present value at a given OAS: the only part of the valuation the search
+  # actually varies.
+  price_at <- function(oas) {
     if (verbose) {
       cat("Calculating price with OAS =", oas, "bps...\n")
     }
 
-    # Calculate credit vectors (prepayment, default, recovery)
-    credit_vectors <- calculate_credit_vectors(
-      asset_data = asset_data,
-      rate_paths = rate_paths,
-      prepay_model = prepay_model
-    )
-
-    # Project cash flows
-    cashflows <- project_cashflows(
-      asset_data = asset_data,
-      credit_vectors = credit_vectors
-    )
-
-    # If structured, aggregate cash flows using deal structure
     if (structured) {
-      aggregated_cashflows <- aggregate_cashflows(
-        cashflows = cashflows,
-        asset_data = asset_data,
-        deal_structure = deal_structure
-      )
-
-      # Calculate present value
       pv_result <- calculate_present_value(
         cashflows = aggregated_cashflows,
         rate_paths = rate_paths,
         oas = oas,
+        reference_key = reference_key,
         asset_level = FALSE,
-        total_idx = 5  # Total cash flow index for bond-level cashflows
+        total_idx = cashflow_components("bond")[["total"]],
+        discounting = discounting
       )
-
-      # Calculate weighted average price
-      bond_balances <- deal_structure$bonds$balance
-      total_bond_balance <- sum(bond_balances)
-      weighted_price <- sum(pv_result$mean_pvs * (bond_balances / total_bond_balance)) * 100 / total_bond_balance
-
+      weighted_price <- sum(pv_result$mean_pvs) * 100 / total_bond_balance
     } else {
-      # Calculate present value
       pv_result <- calculate_present_value(
         cashflows = cashflows,
         rate_paths = rate_paths,
         oas = oas,
+        reference_key = reference_key,
         asset_level = TRUE,
-        total_idx = 9  # Total cash flow index for asset-level cashflows
+        total_idx = cashflow_components("asset")[["total"]],
+        discounting = discounting
       )
-
-      # Calculate weighted average price
       weighted_price <- sum(pv_result$mean_pvs) * 100 / total_balance
     }
 
-    # Calculate average life
-    avg_life_result <- calculate_average_life(
-      cashflows = cashflows,
-      asset_level = TRUE
-    )
-
-    # Calculate duration and convexity
-    duration_result <- calculate_duration_convexity(
-      cashflows = cashflows,
-      rate_paths = rate_paths,
-      oas = oas,
-      asset_level = TRUE
-    )
-
-    # Return results
-    return(list(
-      price = weighted_price,
-      oas = oas,
-      pv_result = pv_result,
-      cashflows = cashflows,
-      credit_vectors = credit_vectors,
-      avg_life = avg_life_result,
-      duration = duration_result,
-      structured_cashflows = if (structured) aggregated_cashflows else NULL
-    ))
+    list(price = weighted_price, pv_result = pv_result)
   }
 
   # Binary search for OAS
@@ -137,8 +156,10 @@ calculate_oas <- function(asset_data, rate_paths, prepay_model, market_price,
   current_oas <- (lower_bound + upper_bound) / 2
 
   iteration <- 0
-  best_result <- NULL
+  best_oas <- current_oas
+  best_priced <- NULL
   best_error <- Inf
+  converged <- FALSE
 
   if (verbose) {
     cat("Starting OAS calculation with binary search...\n")
@@ -151,8 +172,8 @@ calculate_oas <- function(asset_data, rate_paths, prepay_model, market_price,
     iteration <- iteration + 1
 
     # Calculate price for current OAS
-    result <- price_function(current_oas)
-    current_price <- result$price
+    priced <- price_at(current_oas)
+    current_price <- priced$price
     current_error <- abs(current_price - market_price)
 
     if (verbose) {
@@ -160,14 +181,17 @@ calculate_oas <- function(asset_data, rate_paths, prepay_model, market_price,
                   iteration, current_oas, current_price, market_price, current_error))
     }
 
-    # Check if this is the best result so far
+    # Track the best spread seen, not a whole valuation: the expensive parts
+    # of the result are built once, after the search settles.
     if (current_error < best_error) {
       best_error <- current_error
-      best_result <- result
+      best_oas <- current_oas
+      best_priced <- priced
     }
 
     # Check if we've converged
     if (current_error < tolerance) {
+      converged <- TRUE
       if (verbose) {
         cat("Converged within tolerance. OAS =", current_oas, "bps\n")
       }
@@ -196,12 +220,33 @@ calculate_oas <- function(asset_data, rate_paths, prepay_model, market_price,
     }
   }
 
-  # Use best result if not converged
-  if (iteration >= max_iterations) {
+  # Use the best spread seen if the search did not converge
+  if (!converged) {
     warning("Maximum iterations reached without convergence. Using best result with error: ", best_error)
-    result <- best_result
-    current_oas <- result$oas
+    current_oas <- best_oas
   }
+
+  # Duration is wanted for the answer, not for the search, so it is computed
+  # once here rather than at every trial spread.
+  duration_result <- calculate_duration_convexity(
+    cashflows = cashflows,
+    rate_paths = rate_paths,
+    oas = current_oas,
+    reference_key = reference_key,
+    asset_level = TRUE,
+    discounting = discounting
+  )
+
+  result <- list(
+    price = best_priced$price,
+    oas = current_oas,
+    pv_result = best_priced$pv_result,
+    cashflows = cashflows,
+    credit_vectors = credit_vectors,
+    avg_life = avg_life_result,
+    duration = duration_result,
+    structured_cashflows = aggregated_cashflows
+  )
 
   # Calculate execution time
   end_time <- Sys.time()
@@ -210,10 +255,22 @@ calculate_oas <- function(asset_data, rate_paths, prepay_model, market_price,
   # Add additional information to result
   result$market_price <- market_price
   result$price_error <- abs(result$price - market_price)
-  result$converged <- iteration < max_iterations
+  result$converged <- converged
   result$iterations <- iteration
   result$execution_time <- execution_time
   result$search_range <- search_range
+
+  # The conventions this solve ran under, so a sensitivity or surface built
+  # from it re-solves on the same basis rather than silently reverting to the
+  # defaults.
+  result$options <- list(
+    reference_key = reference_key,
+    discounting = discounting,
+    accrual_method = accrual_method,
+    start_date = start_date,
+    terminal_balance = terminal_balance,
+    recovery_basis = recovery_basis
+  )
   result$asset_data <- asset_data
   result$rate_paths <- rate_paths
   result$prepay_model <- prepay_model
@@ -272,12 +329,10 @@ binary_search_oas <- function(cashflows, times, rate_paths, market_price,
       # Use rates at times closest to cash flow times
       cf_rates <- numeric(length(times))
       for (t in seq_along(times)) {
-        time_in_months <- round(times[t] * 12)
-        if (time_in_months <= ncol(reference_rates)) {
-          cf_rates[t] <- rates[time_in_months]
-        } else {
-          cf_rates[t] <- rates[ncol(reference_rates)]
-        }
+        # Clamped into range at both ends: a time under half a month rounds to
+        # 0, which indexes nothing.
+        time_in_months <- max(1L, min(round(times[t] * 12), ncol(reference_rates)))
+        cf_rates[t] <- rates[time_in_months]
       }
 
       # Calculate discount factors with OAS
@@ -384,7 +439,9 @@ print.oas_result <- function(x, ...) {
 #' @param object An object of class "oas_result"
 #' @param ... Additional arguments (not used)
 #'
-#' @return A list with a summary of the OAS calculation
+#' @return A list with a summary of the OAS calculation. The
+#'   \code{convergence} element holds \code{converged}, a logical, and
+#'   \code{iterations}, an integer.
 #'
 #' @export
 #' @method summary oas_result
@@ -420,7 +477,7 @@ summary.oas_result <- function(object, ...) {
   )
 
   # Provide information about convergence
-  converged <- if(object$converged) "Yes" else "No"
+  converged <- isTRUE(object$converged)
   iterations <- object$iterations
 
   # Calculate asset-specific metrics if available

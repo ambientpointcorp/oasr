@@ -1,0 +1,52 @@
+name: parallel-paths
+
+# The socket-cluster branches are unreachable on Unix, where the engine forks
+# instead. This runs them on Windows and asserts they agree with the
+# sequential path, which no local run can check.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  windows-parallel:
+    runs-on: windows-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      NOT_CRAN: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::devtools
+          needs: check
+      - name: socket cluster agrees with sequential
+        shell: Rscript {0}
+        run: |
+          devtools::load_all(".")
+          data(sample_abs_data)
+          dns <- list(
+            params = list(kappa = c(0.02, 0.3, 0.5), theta = c(0.04, -0.02, 0.01),
+                          sigma = c(0.005, 0.01, 0.02),
+                          names = c("Level", "Slope", "Curvature"), lambda = 0.7308),
+            initial_factors = c(0.035, -0.015, 0.005), lambda = 0.7308)
+          rp <- simulate_rates(dns, n_paths = 6, n_periods = 120,
+                               maturities = c(0.25, 1, 5, 10), seed = 1, engine = "exact")
+          pm <- prepayment_model("cpr_cdr", base_cpr = 0.06, base_cdr = 0.01,
+                                 recovery_rate = 0.65)
+          cv_seq <- calculate_credit_vectors(sample_abs_data, rp, pm)
+          cv_par <- calculate_credit_vectors(sample_abs_data, rp, pm,
+                                             run_parallel = TRUE, n_cores = 2)
+          stopifnot(identical(cv_seq, cv_par))
+          stopifnot(identical(project_cashflows(sample_abs_data, cv_seq),
+                              project_cashflows(sample_abs_data, cv_seq,
+                                                run_parallel = TRUE, n_cores = 2)))
+          stopifnot(identical(project_cashflows_with_io(sample_abs_data, cv_seq),
+                              project_cashflows_with_io(sample_abs_data, cv_seq,
+                                                        run_parallel = TRUE, n_cores = 2)))
+          cat("socket cluster agrees with sequential on all three\n")

@@ -11,7 +11,9 @@ calculate_duration_convexity(
   shock = 100,
   reference_key = "10",
   asset_level = TRUE,
-  total_idx = 9
+  total_idx = 9,
+  discounting = c("path", "spot"),
+  reproject = NULL
 )
 }
 \arguments{
@@ -28,10 +30,26 @@ calculate_duration_convexity(
 \item{asset_level}{Logical. Whether the cashflows are at the asset level or bond level}
 
 \item{total_idx}{Integer. Index of the total cash flow component in cashflows}
+
+\item{discounting}{Character. Passed to \code{\link{calculate_present_value}}.}
+
+\item{reproject}{Function or NULL. Given a shocked \code{rate_paths}, returns
+the cash flows projected under it. Supplying one makes this a true
+effective duration, with prepayments responding to the shock. Left
+NULL the same fixed cash flows are repriced at both shocks, which is
+a spread duration; it stays the default because re-projecting roughly
+triples the cost, not because it is the better measure.}
 }
 \value{
 A list containing:
-\item{duration}{Vector of effective durations for each asset/bond}
+\item{duration}{Vector of price sensitivities, one per asset or bond,
+computed as \code{-(P_down - P_up) / (2 * P_base * shock)}. This is the
+signed logarithmic derivative \code{(1/P) dP/dy}, so it is negative for
+an instrument whose price falls as yields rise. Traditional fixed income
+negates this to print a positive number; the signed form is kept here
+because it remains correct for instruments whose price rises with yield,
+such as IO strips and inverse floaters. Negate it if you want the
+conventional reading.}
 \item{convexity}{Vector of effective convexities for each asset/bond}
 \item{price_up}{Vector of prices with upward rate shock}
 \item{price_base}{Vector of prices with base rates}

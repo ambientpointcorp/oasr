@@ -17,9 +17,23 @@
 #' @param maturities Numeric vector. Maturities (in years) for which to calculate yields
 #' @param frequency Character. Time frequency, one of "monthly" (default), "quarterly", or "annual"
 #' @param seed Integer. Random seed for reproducibility
+#' @param engine Character. Simulation engine passed to
+#'        \code{dnsr::simulate_dns_factors()}: \code{"yuima"} (the dnsr
+#'        default, which needs the yuima package) or \code{"exact"}, which
+#'        samples the exact transition law and needs no extra package.
+#'        Defaults to dnsr's own choice.
+#' @param include_t0 Logical. \code{dnsr} returns the deterministic t = 0 curve
+#'        followed by one column per simulated step, so the result has
+#'        \code{n_periods + 1} columns and column 1 is identical on every path.
+#'        \code{TRUE}, the default, keeps it: path-consistent discounting needs
+#'        it, because the rate prevailing over month 1 is the one observed at
+#'        time 0. \code{FALSE} drops it, giving exactly \code{n_periods}
+#'        columns with column \code{t} being month \code{t}. Either way the
+#'        columns are named by their period, so the convention is visible in
+#'        the object.
 #'
 #' @return A list containing:
-#'   \item{yield_paths}{A list of matrices, one for each maturity, with dimensions [path, time]}
+#'   \item{yield_paths}{A list of matrices, one for each maturity, with dimensions `[path, time]`}
 #'   \item{factors}{The simulated DNS factors}
 #'   \item{params}{The DNS parameters used for simulation}
 #'   \item{maturities}{The maturities for which yields were calculated}
@@ -34,7 +48,8 @@
 #' @export
 simulate_rates <- function(dns_params, n_paths = 100, n_periods = 360,
                            maturities = c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30),
-                           frequency = "monthly", seed = NULL) {
+                           frequency = "monthly", seed = NULL,
+                           engine = c("yuima", "exact"), include_t0 = TRUE) {
 
   # Parameter validation
   checkmate::assert_list(dns_params)
@@ -42,6 +57,8 @@ simulate_rates <- function(dns_params, n_paths = 100, n_periods = 360,
   checkmate::assert_int(n_periods, lower = 1)
   checkmate::assert_numeric(maturities, lower = 0)
   checkmate::assert_choice(frequency, c("monthly", "quarterly", "annual"))
+  engine <- match.arg(engine)
+  checkmate::assert_flag(include_t0)
 
   # Calculate time horizon based on frequency
   time_factor <- switch(frequency,
@@ -145,7 +162,8 @@ simulate_rates <- function(dns_params, n_paths = 100, n_periods = 360,
     n_steps = n_periods,
     n_paths = n_paths,
     include_correlation = TRUE,
-    seed = seed
+    seed = seed,
+    engine = engine
   )
 
   # Use dnsr to calculate yield curves
@@ -169,9 +187,27 @@ simulate_rates <- function(dns_params, n_paths = 100, n_periods = 360,
     yield_paths[[maturity_key]] <- t(yield_curves[, m_idx, ])
   }
 
+  # Name the time axis. Column 1 holds the t = 0 curve, so the periods run
+  # 0..n_periods; labelling them changes no value and no position, it just
+  # stops the extra column being invisible.
+  factors <- sim_result$factors
+  yield_paths <- lapply(yield_paths, function(m) {
+    colnames(m) <- seq_len(ncol(m)) - 1L
+    m
+  })
+
+  if (!include_t0) {
+    yield_paths <- lapply(yield_paths, function(m) {
+      m <- m[, -1, drop = FALSE]
+      colnames(m) <- seq_len(ncol(m))
+      m
+    })
+    factors <- factors[-1, , , drop = FALSE]
+  }
+
   return(list(
     yield_paths = yield_paths,
-    factors = sim_result$factors,
+    factors = factors,
     params = dns_params,
     maturities = maturities
   ))
@@ -184,7 +220,7 @@ simulate_rates <- function(dns_params, n_paths = 100, n_periods = 360,
 #' @param rate_paths List. The result from \code{\link{simulate_rates}}
 #' @param reference_key Character. The key for the reference rate to extract (e.g., "10" for 10-year)
 #'
-#' @return A matrix of reference rates with dimensions [path, time]
+#' @return A matrix of reference rates with dimensions `[path, time]`
 #'
 #' @examples
 #' \dontrun{
@@ -250,8 +286,10 @@ get_discount_factors <- function(rate_paths, reference_key = "10", spread = 0, t
 
   # Calculate discount factors for each path
   for (i in 1:n_paths) {
-    # Get rates for this path (with spread)
-    rates <- reference_rates[i, ] + spread
+    # Get rates for this path (with spread). Unnamed: the yield matrices now
+    # carry period labels, and those would otherwise ride along into the
+    # returned discount factors, which have always been a bare numeric vector.
+    rates <- unname(reference_rates[i, ]) + spread
 
     # Calculate discount factors: exp(-r * t)
     # For each time point, we need to use the appropriate rate
@@ -259,8 +297,9 @@ get_discount_factors <- function(rate_paths, reference_key = "10", spread = 0, t
     df <- numeric(length(times))
 
     for (t in seq_along(times)) {
-      # Convert time to period index
-      period_idx <- min(round(times[t] * 12), n_periods)
+      # Convert time to period index, clamped into range: a time under half a
+      # month rounds to 0, which indexes nothing.
+      period_idx <- max(1L, min(round(times[t] * 12), n_periods))
 
       # Calculate discount factor
       df[t] <- exp(-rates[period_idx] * times[t])

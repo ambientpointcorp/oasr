@@ -15,13 +15,11 @@
 
 ## Installation
 
-Neither `oasr` nor its `dnsr` dependency is on CRAN, and `oasr` does not
-declare a `Remotes:` field, so install `dnsr` first — otherwise the `oasr`
-install fails looking for `dnsr` on CRAN:
+Neither `oasr` nor its `dnsr` dependency is on CRAN. `oasr` declares `dnsr`
+in `Remotes:`, so a single install resolves both:
 
 ```r
 # install.packages("remotes")
-remotes::install_github("ambientpointcorp/dnsr")
 remotes::install_github("ambientpointcorp/oasr")
 ```
 
@@ -146,13 +144,37 @@ rate_paths <- simulate_rates(sim_params, n_paths = 100)
 | Rate paths | `simulate_rates()`, `extract_reference_rates()`, `get_discount_factors()` |
 | Prepayment and credit | `prepayment_model()`, `psa_prepayment_model()`, `survival_prepayment_model()`, `custom_prepayment_model()`, `calculate_credit_vectors()` |
 | Cashflows | `project_cashflows()`, `project_cashflows_with_io()`, `aggregate_cashflows()` |
-| Valuation | `calculate_present_value()`, `calculate_price()`, `calculate_average_life()` |
+| Valuation | `calculate_present_value()`, `calculate_price()`, `calculate_average_life()`, `cashflow_components()` |
 | Spreads | `calculate_oas()`, `binary_search_oas()`, `calculate_z_spread()`, `calculate_option_cost()` |
 | Risk | `calculate_duration_convexity()`, `run_oas_sensitivity()`, `create_oas_surface()` |
 | Output | `create_oas_report()`, `plot_cashflows()`, `plot_prepayment_rates()`, `plot_rate_paths()`, `plot_yield_curves()`, `plot_yield_surface()` |
 
 `oas_result`, `oas_sensitivity`, and `oas_surface` objects carry `print()`,
 `plot()`, and (for `oas_result`) `summary()` methods.
+
+## Conventions
+
+Several modelling conventions are settable rather than fixed. Each defaults to
+the behaviour that is correct rather than the behaviour that is oldest, and the
+earlier behaviour stays reachable:
+
+| Argument | Default | Alternative |
+| :--- | :--- | :--- |
+| `accrual_method` | `"30/360"` | `"ACT/365"`, `"ACT/360"`, with a `start_date` or per-loan `accrual_start_date` anchor. A per-loan `accrual_method` or `Accrual` column takes precedence over the argument |
+| `terminal_balance` | `"return"` | `"drop"`, discarding the balance outstanding at the horizon |
+| `on_short_horizon` | `"warn"` | `"silent"`, `"error"` |
+| `recovery_basis` | `"defaults"` | `"balance"`, taking recovery on the whole balance rather than the amount that defaulted |
+| `discounting` | `"path"` | `"spot"`, discounting each cash flow at the reference yield in its own period |
+| `reproject` | `NULL` | a projection function, making `calculate_duration_convexity()` a true effective duration |
+| `include_t0` | `TRUE` | `FALSE`, returning exactly `n_periods` columns from `simulate_rates()` |
+
+`calculate_oas()` records the conventions it ran under in `result$options`, and
+`run_oas_sensitivity()` and `create_oas_surface()` re-solve on them.
+
+Note that `duration` is the signed logarithmic derivative `(1/P) dP/dy`, not
+the negated fixed-income reading, so it is negative for an instrument whose
+price falls as yields rise. The signed form stays correct for instruments whose
+price rises with yield; negate it for the conventional presentation.
 
 ## Citation
 
@@ -179,4 +201,5 @@ If you use `oasr` in your research, please cite:
 
 ## License
 
-MIT © Ambient Point Corp. See `LICENSE` for the full text.
+MIT © Ambient Point Corp. `LICENSE` holds the two-field stub R expects; the
+full text is in `LICENSE.md`.

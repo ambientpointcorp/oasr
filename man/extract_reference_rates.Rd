@@ -12,7 +12,7 @@ extract_reference_rates(rate_paths, reference_key = "10")
 \item{reference_key}{Character. The key for the reference rate to extract (e.g., "10" for 10-year)}
 }
 \value{
-A matrix of reference rates with dimensions \link{path, time}
+A matrix of reference rates with dimensions \verb{[path, time]}
 }
 \description{
 Extracts a specific reference rate (e.g., 1-year, 10-year) from

@@ -1,4 +1,3 @@
-context("Prepayment Model Functions")
 
 # Setup mock asset data and rate paths
 setup_test_data <- function() {
@@ -41,8 +40,8 @@ test_that("prepayment_model creates valid model structure", {
   # Test basic CPR/CDR model
   model1 <- prepayment_model(type = "cpr_cdr", base_cpr = 0.06, base_cdr = 0.01, recovery_rate = 0.65)
   
-  expect_is(model1, "prepayment_model")
-  expect_is(model1, "list")
+  expect_s3_class(model1, "prepayment_model")
+  expect_type(model1, "list")
   expect_equal(model1$type, "cpr_cdr")
   expect_equal(model1$base_cpr, 0.06)
   expect_equal(model1$base_cdr, 0.01)
@@ -51,7 +50,7 @@ test_that("prepayment_model creates valid model structure", {
   # Test PSA model
   model2 <- psa_prepayment_model(psa_multiplier = 1.5, base_cdr = 0.01, recovery_rate = 0.65)
   
-  expect_is(model2, "prepayment_model")
+  expect_s3_class(model2, "prepayment_model")
   expect_equal(model2$type, "psa")
   expect_equal(model2$psa_multiplier, 1.5)
   expect_equal(model2$base_cdr, 0.01)
@@ -59,7 +58,7 @@ test_that("prepayment_model creates valid model structure", {
   # Test survival model
   model3 <- survival_prepayment_model(prepay_hazard = 0.005, default_hazard = 0.001)
   
-  expect_is(model3, "prepayment_model")
+  expect_s3_class(model3, "prepayment_model")
   expect_equal(model3$type, "survival")
   expect_equal(model3$prepay_hazard, 0.005)
   expect_equal(model3$default_hazard, 0.001)
@@ -80,9 +79,9 @@ test_that("prepayment_model creates valid model structure", {
   
   model4 <- custom_prepayment_model(custom_fn, param1 = "test", param2 = 1.0)
   
-  expect_is(model4, "prepayment_model")
+  expect_s3_class(model4, "prepayment_model")
   expect_equal(model4$type, "custom")
-  expect_is(model4$custom_fn, "function")
+  expect_type(model4$custom_fn, "closure")
   expect_equal(model4$param1, "test")
   expect_equal(model4$param2, 1.0)
 })
@@ -105,7 +104,7 @@ test_that("calculate_credit_vectors produces valid output", {
   result <- calculate_credit_vectors(asset_data, rate_paths, prepay_model, reference_key = "10")
   
   # Check structure
-  expect_is(result, "list")
+  expect_type(result, "list")
   expect_true(all(c("prepay_rates", "default_rates", "recovery_rates") %in% names(result)))
   
   # Check dimensions

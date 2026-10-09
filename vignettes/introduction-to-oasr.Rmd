@@ -60,7 +60,7 @@ head(sample_abs_data)
 
 First, we need to simulate interest rate paths using the `dnsr` package's DNS model capabilities:
 
-```{r simulate-rates, eval=FALSE}
+```{r simulate-rates}
 # In a real analysis, we would calibrate DNS parameters from market data
 # dns_params <- dnsr::get_calibrated_dns_params()
 
@@ -80,20 +80,23 @@ dns_params <- list(
 )
 
 # Simulate 100 interest rate paths for 360 months (30 years)
-rate_paths <- simulate_rates(dns_params, n_paths = 100, n_periods = 360,
-                           maturities = c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30))
+# engine = "exact" samples the exact transition law, so the vignette builds
+# without the optional yuima package.
+rate_paths <- simulate_rates(dns_params, n_paths = 10, n_periods = 360, seed = 42,
+                             maturities = c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30),
+                             engine = "exact")
 ```
 
 Let's visualize some of the simulated rate paths:
 
-```{r plot-rates, eval=FALSE}
+```{r plot-rates}
 # Plot 10 random paths of the 10-year rate
 plot_rate_paths(rate_paths, maturity = "10", sample_size = 10)
 ```
 
 And look at yield curves at different time points:
 
-```{r plot-curves, eval=FALSE}
+```{r plot-curves}
 # Plot yield curves at different time points
 plot_yield_curves(rate_paths, time_points = c(0, 1, 5, 10, 20), path_idx = 1)
 ```
@@ -134,7 +137,7 @@ survival_model <- survival_prepayment_model(
 
 Now we can perform the OAS calculation:
 
-```{r calculate-oas, eval=FALSE}
+```{r calculate-oas}
 # Calculate OAS with a target market price of 101.5
 oas_result <- calculate_oas(
   asset_data = sample_abs_data,
@@ -142,7 +145,7 @@ oas_result <- calculate_oas(
   prepay_model = prepay_model,
   market_price = 101.5,
   max_iterations = 50,
-  verbose = TRUE
+  verbose = FALSE
 )
 
 # Print the OAS result
@@ -156,7 +159,7 @@ summary(oas_result)
 
 The package provides various visualization functions:
 
-```{r visualize, eval=FALSE}
+```{r visualize}
 # Plot cash flows
 plot(oas_result, type = "cashflows")
 
@@ -177,13 +180,14 @@ plots$rates
 
 We can analyze how OAS is affected by changes in interest rates and prepayment speeds:
 
-```{r sensitivity, eval=FALSE}
+```{r sensitivity}
 # Run sensitivity analysis
 sensitivity <- run_oas_sensitivity(
   oas_result,
-  sensitivity_type = "both",
-  rate_shifts = c(-200, -100, -50, 0, 50, 100, 200),
-  prepay_multipliers = c(0.5, 0.75, 1.0, 1.25, 1.5, 2.0)
+  sensitivity_type = "rates",
+  rate_shifts = c(-100, 0, 100),
+  max_iterations = 12,
+  verbose = FALSE
 )
 
 # Print sensitivity results
@@ -192,9 +196,6 @@ print(sensitivity)
 # Plot sensitivity analysis results
 sensitivity_plots <- plot(sensitivity)
 sensitivity_plots$oas_rate
-sensitivity_plots$wal_rate
-sensitivity_plots$oas_prepay
-sensitivity_plots$wal_prepay
 ```
 
 For more advanced analysis, we can create a 2D surface of OAS sensitivity:
@@ -215,7 +216,7 @@ plot(surface, type = "oas")
 
 The package also supports analysis of structured securities:
 
-```{r structured, eval=FALSE}
+```{r structured}
 # Load sample deal structure
 data(sample_deal_structure)
 

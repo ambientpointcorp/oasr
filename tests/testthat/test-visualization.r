@@ -1,4 +1,3 @@
-context("Visualization Functions")
 
 # Create minimal mock OAS result for testing plots
 setup_mock_oas_result <- function() {
@@ -126,25 +125,25 @@ test_that("plot_cashflows produces valid output", {
   p1 <- plot_cashflows(oas_result)
 
   # Check output type
-  expect_is(p1, "ggplot")
+  expect_s3_class(p1, "ggplot")
 
   # Test with specific asset
   p2 <- plot_cashflows(oas_result, asset_idx = 1)
 
   # Check output type
-  expect_is(p2, "ggplot")
+  expect_s3_class(p2, "ggplot")
 
   # Test with different components
   p3 <- plot_cashflows(oas_result, components = c("scheduled_principal", "interest"))
 
   # Check output type
-  expect_is(p3, "ggplot")
+  expect_s3_class(p3, "ggplot")
 
   # Test with multiple paths
   p4 <- plot_cashflows(oas_result, average_paths = FALSE)
 
   # Check output type
-  expect_is(p4, "ggplot")
+  expect_s3_class(p4, "ggplot")
 })
 
 test_that("plot_rate_paths produces valid output", {
@@ -158,19 +157,19 @@ test_that("plot_rate_paths produces valid output", {
   p1 <- plot_rate_paths(oas_result$rate_paths)
 
   # Check output type
-  expect_is(p1, "ggplot")
+  expect_s3_class(p1, "ggplot")
 
   # Test with different maturity
   p2 <- plot_rate_paths(oas_result$rate_paths, maturity = "5")
 
   # Check output type
-  expect_is(p2, "ggplot")
+  expect_s3_class(p2, "ggplot")
 
   # Test with sample size
   p3 <- plot_rate_paths(oas_result$rate_paths, sample_size = 1)
 
   # Check output type
-  expect_is(p3, "ggplot")
+  expect_s3_class(p3, "ggplot")
 })
 
 test_that("plot_yield_curves produces valid output", {
@@ -184,19 +183,19 @@ test_that("plot_yield_curves produces valid output", {
   p1 <- plot_yield_curves(oas_result$rate_paths)
 
   # Check output type
-  expect_is(p1, "ggplot")
+  expect_s3_class(p1, "ggplot")
 
   # Test with different time points
   p2 <- plot_yield_curves(oas_result$rate_paths, time_points = c(0, 1))
 
   # Check output type
-  expect_is(p2, "ggplot")
+  expect_s3_class(p2, "ggplot")
 
   # Test with different path index
   p3 <- plot_yield_curves(oas_result$rate_paths, path_idx = 2)
 
   # Check output type
-  expect_is(p3, "ggplot")
+  expect_s3_class(p3, "ggplot")
 })
 
 test_that("plot_prepayment_rates produces valid output", {
@@ -210,27 +209,27 @@ test_that("plot_prepayment_rates produces valid output", {
   p1 <- plot_prepayment_rates(oas_result)
 
   # Check output type
-  expect_is(p1, "list")
-  expect_is(p1$prepay, "ggplot")
-  expect_is(p1$default, "ggplot")
+  expect_type(p1, "list")
+  expect_s3_class(p1$prepay, "ggplot")
+  expect_s3_class(p1$default, "ggplot")
 
   # Test with specific asset
   p2 <- plot_prepayment_rates(oas_result, asset_idx = 1)
 
   # Check output type
-  expect_is(p2, "list")
+  expect_type(p2, "list")
 
   # Test with prepay only
   p3 <- plot_prepayment_rates(oas_result, type = "prepay")
 
   # Check output type
-  expect_is(p3, "ggplot")
+  expect_s3_class(p3, "ggplot")
 
   # Test with default only
   p4 <- plot_prepayment_rates(oas_result, type = "default")
 
   # Check output type
-  expect_is(p4, "ggplot")
+  expect_s3_class(p4, "ggplot")
 })
 
 test_that("plot yields surface conditionally works based on available packages", {
@@ -270,7 +269,7 @@ test_that("plot method for oas_result works", {
   p1 <- plot(oas_result, type = "cashflows")
 
   # Check output type
-  expect_is(p1, "ggplot")
+  expect_s3_class(p1, "ggplot")
 
   # Test with prepayments
   p2 <- plot(oas_result, type = "prepayments")
@@ -282,13 +281,13 @@ test_that("plot method for oas_result works", {
   p3 <- plot(oas_result, type = "rates")
 
   # Check output type
-  expect_is(p3, "ggplot")
+  expect_s3_class(p3, "ggplot")
 
   # Test with all
   p_all <- plot(oas_result, type = "all")
 
   # Check output structure
-  expect_is(p_all, "list")
+  expect_type(p_all, "list")
   expect_true(all(c("cashflows", "prepayments", "rates") %in% names(p_all)))
 })
 
@@ -312,7 +311,7 @@ test_that("generate_report_content produces valid output", {
   report_content <- generate_report_content(oas_result, "Test Report", "Test Author")
 
   # Check output type
-  expect_is(report_content, "character")
+  expect_type(report_content, "character")
 
   # Check for expected sections
   expect_true(grepl("title: \"Test Report\"", report_content))

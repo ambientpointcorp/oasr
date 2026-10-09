@@ -1,4 +1,3 @@
-context("Sensitivity Analysis Functions")
 
 # Create mock OAS result for testing
 setup_mock_oas_result <- function() {
@@ -186,7 +185,13 @@ test_that("run_oas_sensitivity produces valid output with mock calculate_oas", {
   oas_result <- setup_mock_oas_result()
   
   # Define expected behavior of calculate_oas
-  mockery::stub(run_oas_sensitivity, "calculate_oas", mock_calculate_oas)
+  # run_oas_sensitivity now re-solves through .resolve_oas, so that is where
+  # the call to intercept lives.
+  mockery::stub(run_oas_sensitivity, ".resolve_oas",
+                function(oas_result, asset_data, rate_paths, prepay_model,
+                         market_price, max_iterations) {
+                  mock_calculate_oas(asset_data, rate_paths, prepay_model, market_price)
+                })
   
   # Run sensitivity analysis with minimal parameters
   sensitivity <- run_oas_sensitivity(
@@ -199,17 +204,17 @@ test_that("run_oas_sensitivity produces valid output with mock calculate_oas", {
   )
   
   # Check structure
-  expect_is(sensitivity, "oas_sensitivity")
-  expect_is(sensitivity, "list")
+  expect_s3_class(sensitivity, "oas_sensitivity")
+  expect_type(sensitivity, "list")
   expect_true(all(c("rate_sensitivity", "prepay_sensitivity", "base_oas", "base_price") %in% names(sensitivity)))
   
   # Check rate sensitivity structure
-  expect_is(sensitivity$rate_sensitivity, "data.frame")
+  expect_s3_class(sensitivity$rate_sensitivity, "data.frame")
   expect_equal(nrow(sensitivity$rate_sensitivity), 3)  # Three rate shifts
   expect_true(all(c("shift", "oas", "price", "wal") %in% names(sensitivity$rate_sensitivity)))
   
   # Check prepay sensitivity structure
-  expect_is(sensitivity$prepay_sensitivity, "data.frame")
+  expect_s3_class(sensitivity$prepay_sensitivity, "data.frame")
   expect_equal(nrow(sensitivity$prepay_sensitivity), 3)  # Three prepay multipliers
   expect_true(all(c("multiplier", "oas", "price", "wal") %in% names(sensitivity$prepay_sensitivity)))
   
@@ -277,8 +282,8 @@ test_that("create_oas_surface produces valid output", {
   )
   
   # Check structure
-  expect_is(surface, "oas_surface")
-  expect_is(surface, "list")
+  expect_s3_class(surface, "oas_surface")
+  expect_type(surface, "list")
   expect_true(all(c("surface_data", "oas_matrix", "price_matrix", "wal_matrix") %in% names(surface)))
   
   # Check dimensions
@@ -287,7 +292,7 @@ test_that("create_oas_surface produces valid output", {
   expect_equal(dim(surface$wal_matrix), c(3, 3))
   
   # Check that surface_data has the right structure
-  expect_is(surface$surface_data, "data.frame")
+  expect_s3_class(surface$surface_data, "data.frame")
   expect_equal(nrow(surface$surface_data), 9)  # 3x3 combinations
   expect_true(all(c("shift", "multiplier", "oas", "price", "wal") %in% names(surface$surface_data)))
   

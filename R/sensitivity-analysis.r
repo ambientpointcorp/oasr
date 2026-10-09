@@ -1,3 +1,43 @@
+#' @title Re-solve on the Same Conventions (Internal)
+#' @description Re-runs \code{\link{calculate_oas}} with whatever conventions
+#'   the base result was solved under. Results from before \code{options} was
+#'   recorded fall back to the function defaults.
+#'
+#' @keywords internal
+#' @noRd
+.resolve_oas <- function(oas_result, asset_data, rate_paths, prepay_model,
+                         market_price, max_iterations) {
+  args <- list(
+    asset_data = asset_data, rate_paths = rate_paths,
+    prepay_model = prepay_model, market_price = market_price,
+    max_iterations = max_iterations, verbose = FALSE
+  )
+  do.call(calculate_oas, c(args, oas_result$options))
+}
+
+#' @title Scale a Prepayment Model (Internal)
+#' @description Multiplies whichever parameter carries prepayment speed for the
+#'   model's type. Shared by \code{\link{run_oas_sensitivity}} and
+#'   \code{\link{create_oas_surface}}, which previously held identical copies.
+#'
+#' @keywords internal
+#' @noRd
+.modify_prepay_model <- function(model, multiplier) {
+  new_model <- model
+
+  if (model$type == "cpr_cdr") {
+    # Capped below 1: a multiplier of 2 on a fast base speed would otherwise
+    # leave the annual-to-monthly conversion undefined.
+    new_model$base_cpr <- min(model$base_cpr * multiplier, 1 - 1e-12)
+  } else if (model$type == "psa") {
+    new_model$psa_multiplier <- model$psa_multiplier * multiplier
+  } else if (model$type == "survival") {
+    new_model$prepay_hazard <- model$prepay_hazard * multiplier
+  }
+
+  new_model
+}
+
 #' @title Run OAS Sensitivity Analysis
 #' @description Runs sensitivity analysis for OAS by varying key parameters.
 #'
@@ -73,14 +113,7 @@ run_oas_sensitivity <- function(oas_result, sensitivity_type = "both",
       }
       
       # Recalculate OAS with fixed market price
-      result <- calculate_oas(
-        asset_data = asset_data,
-        rate_paths = shifted_paths,
-        prepay_model = prepay_model,
-        market_price = market_price,
-        max_iterations = max_iterations,
-        verbose = FALSE
-      )
+      result <- .resolve_oas(oas_result, asset_data, shifted_paths, prepay_model, market_price, max_iterations)
       
       # Store results
       rate_results$oas[i] <- result$oas
@@ -106,23 +139,6 @@ run_oas_sensitivity <- function(oas_result, sensitivity_type = "both",
       convexity = numeric(length(prepay_multipliers))
     )
     
-    # Create a function to modify the prepayment model
-    modify_prepay_model <- function(model, multiplier) {
-      # Create a copy of the model
-      new_model <- model
-      
-      # Modify the appropriate parameter based on model type
-      if (model$type == "cpr_cdr") {
-        new_model$base_cpr <- model$base_cpr * multiplier
-      } else if (model$type == "psa") {
-        new_model$psa_multiplier <- model$psa_multiplier * multiplier
-      } else if (model$type == "survival") {
-        new_model$prepay_hazard <- model$prepay_hazard * multiplier
-      }
-      
-      return(new_model)
-    }
-    
     for (i in seq_along(prepay_multipliers)) {
       multiplier <- prepay_multipliers[i]
       if (verbose) {
@@ -130,17 +146,10 @@ run_oas_sensitivity <- function(oas_result, sensitivity_type = "both",
       }
       
       # Modify prepayment model
-      modified_model <- modify_prepay_model(prepay_model, multiplier)
+      modified_model <- .modify_prepay_model(prepay_model, multiplier)
       
       # Recalculate OAS with fixed market price
-      result <- calculate_oas(
-        asset_data = asset_data,
-        rate_paths = rate_paths,
-        prepay_model = modified_model,
-        market_price = market_price,
-        max_iterations = max_iterations,
-        verbose = FALSE
-      )
+      result <- .resolve_oas(oas_result, asset_data, rate_paths, modified_model, market_price, max_iterations)
       
       # Store results
       prepay_results$oas[i] <- result$oas
@@ -347,23 +356,6 @@ create_oas_surface <- function(oas_result,
   price_matrix <- matrix(NA, nrow = n_shifts, ncol = n_multipliers)
   wal_matrix <- matrix(NA, nrow = n_shifts, ncol = n_multipliers)
   
-  # Create a function to modify the prepayment model
-  modify_prepay_model <- function(model, multiplier) {
-    # Create a copy of the model
-    new_model <- model
-    
-    # Modify the appropriate parameter based on model type
-    if (model$type == "cpr_cdr") {
-      new_model$base_cpr <- model$base_cpr * multiplier
-    } else if (model$type == "psa") {
-      new_model$psa_multiplier <- model$psa_multiplier * multiplier
-    } else if (model$type == "survival") {
-      new_model$prepay_hazard <- model$prepay_hazard * multiplier
-    }
-    
-    return(new_model)
-  }
-  
   # Run analysis for each combination
   total_combinations <- n_shifts * n_multipliers
   combination_counter <- 0
@@ -387,17 +379,10 @@ create_oas_surface <- function(oas_result,
       }
       
       # Modify prepayment model
-      modified_model <- modify_prepay_model(prepay_model, multiplier)
+      modified_model <- .modify_prepay_model(prepay_model, multiplier)
       
       # Calculate OAS with fixed market price
-      result <- try(calculate_oas(
-        asset_data = asset_data,
-        rate_paths = shifted_paths,
-        prepay_model = modified_model,
-        market_price = market_price,
-        max_iterations = max_iterations,
-        verbose = FALSE
-      ), silent = TRUE)
+      result <- try(.resolve_oas(oas_result, asset_data, shifted_paths, modified_model, market_price, max_iterations), silent = TRUE)
       
       # Store results if successful
       if (!inherits(result, "try-error")) {

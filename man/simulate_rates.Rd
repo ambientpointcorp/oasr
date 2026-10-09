@@ -10,7 +10,9 @@ simulate_rates(
   n_periods = 360,
   maturities = c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30),
   frequency = "monthly",
-  seed = NULL
+  seed = NULL,
+  engine = c("yuima", "exact"),
+  include_t0 = TRUE
 )
 }
 \arguments{
@@ -34,10 +36,26 @@ decay rate by the maturity at which the curvature loading peaks.}
 \item{frequency}{Character. Time frequency, one of "monthly" (default), "quarterly", or "annual"}
 
 \item{seed}{Integer. Random seed for reproducibility}
+
+\item{engine}{Character. Simulation engine passed to
+\code{dnsr::simulate_dns_factors()}: \code{"yuima"} (the dnsr
+default, which needs the yuima package) or \code{"exact"}, which
+samples the exact transition law and needs no extra package.
+Defaults to dnsr's own choice.}
+
+\item{include_t0}{Logical. \code{dnsr} returns the deterministic t = 0 curve
+followed by one column per simulated step, so the result has
+\code{n_periods + 1} columns and column 1 is identical on every path.
+\code{TRUE}, the default, keeps it: path-consistent discounting needs
+it, because the rate prevailing over month 1 is the one observed at
+time 0. \code{FALSE} drops it, giving exactly \code{n_periods}
+columns with column \code{t} being month \code{t}. Either way the
+columns are named by their period, so the convention is visible in
+the object.}
 }
 \value{
 A list containing:
-\item{yield_paths}{A list of matrices, one for each maturity, with dimensions \link{path, time}}
+\item{yield_paths}{A list of matrices, one for each maturity, with dimensions \verb{[path, time]}}
 \item{factors}{The simulated DNS factors}
 \item{params}{The DNS parameters used for simulation}
 \item{maturities}{The maturities for which yields were calculated}

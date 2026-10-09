@@ -7,6 +7,11 @@
 #' @param reference_key Character. Key for the reference rate to use
 #' @param asset_level Logical. Whether the cashflows are at the asset level or bond level
 #' @param total_idx Integer. Index of the total cash flow component in cashflows
+#' @param discounting Character. \code{"path"} compounds the short rate along
+#'        each simulated path, which is the Monte Carlo definition of an
+#'        option-adjusted spread. \code{"spot"} is the earlier behaviour: each
+#'        cash flow discounted at the reference rate standing in its own
+#'        period, taken as a zero rate to that maturity.
 #'
 #' @return A list containing:
 #'   \item{present_values}{Matrix of present values for each path and asset/bond}
@@ -15,7 +20,10 @@
 #'
 #' @export
 calculate_present_value <- function(cashflows, rate_paths, oas, reference_key = "10",
-                                   asset_level = TRUE, total_idx = 9) {
+                                   asset_level = TRUE, total_idx = 9,
+                                   discounting = c("path", "spot")) {
+
+  discounting <- match.arg(discounting)
 
   # Parameter validation
   checkmate::assert_list(cashflows)
@@ -33,6 +41,23 @@ calculate_present_value <- function(cashflows, rate_paths, oas, reference_key = 
   # Convert OAS from basis points to decimal
   oas_decimal <- oas / 10000
 
+  # Path discounting compounds the shortest simulated rate period by period.
+  # The reference curve is a long yield, which is not a discount rate for a
+  # one-month cash flow; the short rate is.
+  if (discounting == "path") {
+    maturities <- as.numeric(names(rate_paths$yield_paths))
+    short_key <- names(rate_paths$yield_paths)[which.min(maturities)]
+    short_rates <- rate_paths$yield_paths[[short_key]]
+    if (ncol(short_rates) < n_periods) {
+      short_rates <- cbind(short_rates,
+                           matrix(short_rates[, ncol(short_rates)],
+                                  nrow = nrow(short_rates),
+                                  ncol = n_periods - ncol(short_rates)))
+    }
+    path_factors <- exp(-t(apply(short_rates[, seq_len(n_periods), drop = FALSE] +
+                                   oas_decimal, 1, cumsum) / 12))
+  }
+
   # Initialize matrix for present values (paths x items)
   present_values <- matrix(0, n_paths, n_items)
 
@@ -42,30 +67,24 @@ calculate_present_value <- function(cashflows, rate_paths, oas, reference_key = 
 
     # Process each asset/bond
     for (j in 1:n_items) {
-      # Extract cash flows for this item
-      if (asset_level) {
-        # Asset-level cash flows
-        cf <- cf_array[, , j]
-      } else {
-        # Bond-level cash flows
-        cf <- cf_array[, , j]
-      }
-
-      # Find periods with non-zero total cash flows
-      total_cf <- cf[, total_idx]
-      non_zero_idx <- which(total_cf > 0)
+      # Take the one column needed. Slicing [, , j] first materialised the
+      # whole period-by-component matrix on every pass just to read one of its
+      # columns; the values are identical either way.
+      #
+      # Every non-zero flow, not just the positive ones: a negative total is a
+      # real outflow and dropping it overstates the present value.
+      total_cf <- cf_array[, total_idx, j]
+      non_zero_idx <- which(total_cf != 0)
 
       if (length(non_zero_idx) > 0) {
-        # Times (in years)
-        times <- non_zero_idx / 12
+        if (discounting == "path") {
+          discount_factors <- path_factors[i, non_zero_idx]
+        } else {
+          times <- non_zero_idx / 12
+          rates <- reference_rates[i, non_zero_idx] + oas_decimal
+          discount_factors <- exp(-rates * times)
+        }
 
-        # Discount rates: yield + OAS
-        rates <- reference_rates[i, non_zero_idx] + oas_decimal
-
-        # Calculate discount factors
-        discount_factors <- exp(-rates * times)
-
-        # Calculate present value for this asset/bond
         present_values[i, j] <- sum(total_cf[non_zero_idx] * discount_factors)
       }
     }
@@ -105,9 +124,23 @@ calculate_present_value <- function(cashflows, rate_paths, oas, reference_key = 
 #' @param reference_key Character. Key for the reference rate to use
 #' @param asset_level Logical. Whether the cashflows are at the asset level or bond level
 #' @param total_idx Integer. Index of the total cash flow component in cashflows
+#' @param discounting Character. Passed to \code{\link{calculate_present_value}}.
+#' @param reproject Function or NULL. Given a shocked \code{rate_paths}, returns
+#'        the cash flows projected under it. Supplying one makes this a true
+#'        effective duration, with prepayments responding to the shock. Left
+#'        NULL the same fixed cash flows are repriced at both shocks, which is
+#'        a spread duration; it stays the default because re-projecting roughly
+#'        triples the cost, not because it is the better measure.
 #'
 #' @return A list containing:
-#'   \item{duration}{Vector of effective durations for each asset/bond}
+#'   \item{duration}{Vector of price sensitivities, one per asset or bond,
+#'     computed as \code{-(P_down - P_up) / (2 * P_base * shock)}. This is the
+#'     signed logarithmic derivative \code{(1/P) dP/dy}, so it is negative for
+#'     an instrument whose price falls as yields rise. Traditional fixed income
+#'     negates this to print a positive number; the signed form is kept here
+#'     because it remains correct for instruments whose price rises with yield,
+#'     such as IO strips and inverse floaters. Negate it if you want the
+#'     conventional reading.}
 #'   \item{convexity}{Vector of effective convexities for each asset/bond}
 #'   \item{price_up}{Vector of prices with upward rate shock}
 #'   \item{price_base}{Vector of prices with base rates}
@@ -116,7 +149,14 @@ calculate_present_value <- function(cashflows, rate_paths, oas, reference_key = 
 #' @export
 calculate_duration_convexity <- function(cashflows, rate_paths, oas, shock = 100,
                                         reference_key = "10", asset_level = TRUE,
-                                        total_idx = 9) {
+                                        total_idx = 9,
+                                        discounting = c("path", "spot"),
+                                        reproject = NULL) {
+
+  discounting <- match.arg(discounting)
+  if (!is.null(reproject)) {
+    checkmate::assert_function(reproject)
+  }
 
   # Parameter validation
   checkmate::assert_list(cashflows)
@@ -134,7 +174,8 @@ calculate_duration_convexity <- function(cashflows, rate_paths, oas, shock = 100
     oas = oas,
     reference_key = reference_key,
     asset_level = asset_level,
-    total_idx = total_idx
+    total_idx = total_idx,
+    discounting = discounting
   )
 
   # Create shocked rate paths (up)
@@ -150,22 +191,30 @@ calculate_duration_convexity <- function(cashflows, rate_paths, oas, shock = 100
   }
 
   # Calculate prices with shocked rates
+  # With a projector supplied the cash flows are rebuilt under each shocked
+  # curve, so prepayments move with rates; otherwise the same flows are
+  # repriced, which measures spread rather than rate sensitivity.
+  cashflows_up <- if (is.null(reproject)) cashflows else reproject(yield_paths_up)
+  cashflows_down <- if (is.null(reproject)) cashflows else reproject(yield_paths_down)
+
   up_result <- calculate_present_value(
-    cashflows = cashflows,
+    cashflows = cashflows_up,
     rate_paths = yield_paths_up,
     oas = oas,
     reference_key = reference_key,
     asset_level = asset_level,
-    total_idx = total_idx
+    total_idx = total_idx,
+    discounting = discounting
   )
 
   down_result <- calculate_present_value(
-    cashflows = cashflows,
+    cashflows = cashflows_down,
     rate_paths = yield_paths_down,
     oas = oas,
     reference_key = reference_key,
     asset_level = asset_level,
-    total_idx = total_idx
+    total_idx = total_idx,
+    discounting = discounting
   )
 
   # Calculate effective duration for each asset/bond

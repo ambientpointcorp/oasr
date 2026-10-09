@@ -1,4 +1,3 @@
-context("Rate Modeling Functions")
 
 # Setup mock DNS parameters
 setup_dns_params <- function() {
@@ -28,23 +27,26 @@ test_that("simulate_rates produces expected output structure", {
   
   # Run simulation
   result <- simulate_rates(dns_params, n_paths = n_paths, n_periods = n_periods, 
-                         maturities = maturities, seed = 123)
+                         maturities = maturities, seed = 123, engine = "exact")
   
   # Check structure
-  expect_is(result, "list")
+  expect_type(result, "list")
   expect_true(all(c("yield_paths", "factors", "params", "maturities") %in% names(result)))
   
   # Check yield_paths structure
-  expect_is(result$yield_paths, "list")
+  expect_type(result$yield_paths, "list")
   expect_equal(length(result$yield_paths), length(maturities))
   expect_true(all(as.character(maturities) %in% names(result$yield_paths)))
   
   # Check dimensions of first yield path
   first_maturity <- as.character(maturities[1])
-  expect_equal(dim(result$yield_paths[[first_maturity]]), c(n_paths, n_periods))
+  # dnsr returns n_periods + 1 points: the deterministic t = 0 curve, then one
+  # per simulated step. Dropping that column is the shape change queued for
+  # Phase 4; until then the extra column is the contract.
+  expect_equal(dim(result$yield_paths[[first_maturity]]), c(n_paths, n_periods + 1))
   
   # Check factor dimensions
-  expect_equal(dim(result$factors)[1], n_periods)
+  expect_equal(dim(result$factors)[1], n_periods + 1)
   expect_equal(dim(result$factors)[2], n_paths)
   expect_equal(dim(result$factors)[3], 3) # Level, Slope, Curvature
   
@@ -64,13 +66,13 @@ test_that("extract_reference_rates extracts correct rates", {
   
   # Run simulation
   rate_paths <- simulate_rates(dns_params, n_paths = n_paths, n_periods = n_periods, 
-                             maturities = maturities, seed = 123)
+                             maturities = maturities, seed = 123, engine = "exact")
   
   # Extract reference rates
   ref_rates <- extract_reference_rates(rate_paths, "5")
   
   # Check dimensions and values
-  expect_equal(dim(ref_rates), c(n_paths, n_periods))
+  expect_equal(dim(ref_rates), c(n_paths, n_periods + 1))  # includes t = 0
   expect_equal(ref_rates, rate_paths$yield_paths$`5`)
   
   # Test error handling
@@ -90,7 +92,7 @@ test_that("get_discount_factors calculates correct discount factors", {
   
   # Run simulation
   rate_paths <- simulate_rates(dns_params, n_paths = n_paths, n_periods = n_periods, 
-                             maturities = maturities, seed = 123)
+                             maturities = maturities, seed = 123, engine = "exact")
   
   # Get discount factors with 100 bps spread
   spread <- 0.01  # 100 bps
@@ -98,7 +100,7 @@ test_that("get_discount_factors calculates correct discount factors", {
   df_result <- get_discount_factors(rate_paths, "5", spread, times)
   
   # Check structure
-  expect_is(df_result, "list")
+  expect_type(df_result, "list")
   expect_true(all(c("discount_factors", "times", "reference_rates", "spread") %in% names(df_result)))
   expect_equal(length(df_result$discount_factors), n_paths)
   expect_equal(length(df_result$discount_factors[[1]]), length(times))
@@ -114,8 +116,10 @@ test_that("get_discount_factors calculates correct discount factors", {
   manually_calculated_df <- numeric(length(times))
   
   # Check first path's first discount factor
-  period_idx <- min(round(times[1] * 12), n_periods)
-  rate <- ref_rates[1, period_idx] + spread
+  # unname: the yield matrices carry period labels, which would otherwise make
+  # the expectation a named scalar while the function returns a bare vector.
+  period_idx <- max(1L, min(round(times[1] * 12), n_periods))
+  rate <- unname(ref_rates[1, period_idx]) + spread
   expected_df <- exp(-rate * times[1])
   
   # Allow small numerical differences

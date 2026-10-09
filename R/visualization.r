@@ -5,13 +5,23 @@
 #' @param asset_idx Integer or NULL. Specific asset index to plot, NULL for total
 #' @param components Character vector. Which cash flow components to include
 #' @param average_paths Logical. Whether to average across paths
+#' @param seed Integer. Optional seed for the path sample, so the plot reproduces
 #'
 #' @return A ggplot object
 #'
 #' @export
 plot_cashflows <- function(oas_result, asset_idx = NULL,
                           components = c("scheduled_principal", "prepayment", "interest", "recovery"),
-                          average_paths = TRUE) {
+                          average_paths = TRUE, seed = NULL) {
+  # Fix the sampled paths when asked, leaving the caller's random stream as it
+  # was found.
+  if (!is.null(seed)) {
+    if (exists(".Random.seed", envir = globalenv())) {
+      saved_seed <- get(".Random.seed", envir = globalenv())
+      on.exit(assign(".Random.seed", saved_seed, envir = globalenv()), add = TRUE)
+    }
+    set.seed(seed)
+  }
 
   # Parameter validation
   checkmate::assert_class(oas_result, "oas_result")
@@ -22,16 +32,8 @@ plot_cashflows <- function(oas_result, asset_idx = NULL,
   # Extract cashflows
   cashflows <- oas_result$cashflows
 
-  # Component indices in cashflows array
-  component_idx <- list(
-    scheduled_principal = 2,
-    prepayment = 3,
-    default = 4,
-    loss = 5,
-    recovery = 6,
-    interest = 7,
-    total = 8
-  )
+  # Component positions come from the one place they are written down.
+  component_idx <- as.list(cashflow_components("asset"))
 
   # Filter to requested components
   components <- intersect(components, names(component_idx))
@@ -186,11 +188,21 @@ plot_cashflows <- function(oas_result, asset_idx = NULL,
 #' @param rate_paths List. The result from \code{\link{simulate_rates}}
 #' @param maturity Character. Which maturity to plot (e.g., "10" for 10-year)
 #' @param sample_size Integer. Number of paths to sample
+#' @param seed Integer. Optional seed for the path sample, so the plot reproduces
 #'
 #' @return A ggplot object
 #'
 #' @export
-plot_rate_paths <- function(rate_paths, maturity = "10", sample_size = 10) {
+plot_rate_paths <- function(rate_paths, maturity = "10", sample_size = 10, seed = NULL) {
+  # Fix the sampled paths when asked, leaving the caller's random stream as it
+  # was found.
+  if (!is.null(seed)) {
+    if (exists(".Random.seed", envir = globalenv())) {
+      saved_seed <- get(".Random.seed", envir = globalenv())
+      on.exit(assign(".Random.seed", saved_seed, envir = globalenv()), add = TRUE)
+    }
+    set.seed(seed)
+  }
 
   # Parameter validation
   checkmate::assert_list(rate_paths)
@@ -328,12 +340,22 @@ plot_yield_curves <- function(rate_paths, time_points = c(0, 1, 5, 10), path_idx
 #' @param asset_idx Integer or NULL. Specific asset index to plot, NULL for average
 #' @param type Character. Type of prepayment to plot: "prepay", "default", "both"
 #' @param sample_paths Integer. Number of paths to sample
+#' @param seed Integer. Optional seed for the path sample, so the plot reproduces
 #'
 #' @return A ggplot object or list of ggplot objects
 #'
 #' @export
 plot_prepayment_rates <- function(oas_result, asset_idx = NULL,
-                                  type = "both", sample_paths = 5) {
+                                  type = "both", sample_paths = 5, seed = NULL) {
+  # Fix the sampled paths when asked, leaving the caller's random stream as it
+  # was found.
+  if (!is.null(seed)) {
+    if (exists(".Random.seed", envir = globalenv())) {
+      saved_seed <- get(".Random.seed", envir = globalenv())
+      on.exit(assign(".Random.seed", saved_seed, envir = globalenv()), add = TRUE)
+    }
+    set.seed(seed)
+  }
   # Parameter validation
   checkmate::assert_class(oas_result, "oas_result")
   if (!is.null(asset_idx)) {
@@ -365,7 +387,7 @@ plot_prepayment_rates <- function(oas_result, asset_idx = NULL,
       # Average across all assets
       for (p in sample_path_indices) {
         # Calculate average across assets
-        avg_prepay <- colMeans(credit_vectors$prepay_rates[p, , ])
+        avg_prepay <- rowMeans(matrix(credit_vectors$prepay_rates[p, , ], nrow = n_periods))
 
         # FIX: Ensure dimensions match
         period_seq <- seq_len(length(avg_prepay))
@@ -480,7 +502,7 @@ plot_prepayment_rates <- function(oas_result, asset_idx = NULL,
       # Average across all assets
       for (p in sample_path_indices) {
         # Calculate average across assets
-        avg_default <- colMeans(credit_vectors$default_rates[p, , ])
+        avg_default <- rowMeans(matrix(credit_vectors$default_rates[p, , ], nrow = n_periods))
 
         # FIX: Ensure dimensions match
         period_seq <- seq_len(length(avg_default))
@@ -613,7 +635,6 @@ plot_prepayment_rates <- function(oas_result, asset_idx = NULL,
 #' report <- create_oas_report(oas_result, output_format = "html", output_file = "oas_report.html")
 #' }
 #'
-#' @importFrom rmarkdown render
 #' @export
 create_oas_report <- function(oas_result, output_format = "html",
                              output_file = NULL, title = "OAS Analysis Report",
@@ -649,8 +670,14 @@ create_oas_report <- function(oas_result, output_format = "html",
   }
 
   # Render the report
+  output_dir <- dirname(output_file)
+  if (output_dir == ".") {
+    output_dir <- getwd()
+  }
+
   report_file <- rmarkdown::render(
     input = rmd_file,
+    output_dir = output_dir,
     output_format = output_format_fn(
       toc = TRUE,
       toc_depth = 3,
@@ -658,7 +685,7 @@ create_oas_report <- function(oas_result, output_format = "html",
       fig_width = 10,
       fig_height = 7
     ),
-    output_file = output_file,
+    output_file = basename(output_file),
     envir = new.env()
   )
 
@@ -685,13 +712,16 @@ generate_report_content <- function(oas_result, title, author) {
                         "library(dplyr)\n",
                         "```\n\n")
 
-  # Load the OAS result object
-  oas_chunk <- paste0("```{r load_data}\n",
-                      "oas_result <- readRDS('", tempfile(fileext = ".rds"), "')\n",
-                      "```\n\n")
+  # Save the result, then point the chunk at the path actually written. The
+  # path is bound once and reused; recovering it from the chunk text by regex
+  # is what used to strand a trailing quote on the filename.
+  data_file <- tempfile(fileext = ".rds")
+  saveRDS(oas_result, data_file)
 
-  # Save the OAS result object
-  saveRDS(oas_result, sub("'", "", regmatches(oas_chunk, regexpr("'.*'", oas_chunk))))
+  oas_chunk <- paste0("```{r load_data}\n",
+                      "oas_result <- readRDS(",
+                      encodeString(data_file, quote = "'"), ")\n",
+                      "```\n\n")
 
   # Create sections
   summary_section <- paste0("# Executive Summary\n\n",
@@ -849,16 +879,17 @@ plot_yield_surface <- function(rate_paths, interactive = TRUE) {
         colorscale = "Viridis",
         opacity = 0.8
       )
-    ) %>%
-      plotly::add_surface() %>%
-      plotly::layout(
-        title = "Yield Curve Surface",
-        scene = list(
-          xaxis = list(title = "Maturity (years)"),
-          yaxis = list(title = "Time (years)"),
-          zaxis = list(title = "Yield (%)")
-        )
+    )
+    p <- plotly::add_surface(p)
+    p <- plotly::layout(
+      p,
+      title = "Yield Curve Surface",
+      scene = list(
+        xaxis = list(title = "Maturity (years)"),
+        yaxis = list(title = "Time (years)"),
+        zaxis = list(title = "Yield (%)")
       )
+    )
   } else {
     # Create static 3D plot with lattice
     p <- lattice::wireframe(
