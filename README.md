@@ -23,6 +23,17 @@ in `Remotes:`, so a single install resolves both:
 remotes::install_github("ambientpointcorp/oasr")
 ```
 
+`dnsr` is not public yet, so that install currently works only for accounts
+with access to it. Authenticate first with a token that can read it:
+
+```r
+Sys.setenv(GITHUB_PAT = "<a token with access to ambientpointcorp/dnsr>")
+remotes::install_github("ambientpointcorp/oasr")
+```
+
+Once `dnsr` is published the first form works unchanged and this step can be
+dropped.
+
 ## Usage
 
 ### Basic Example
