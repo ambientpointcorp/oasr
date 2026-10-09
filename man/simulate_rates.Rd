@@ -15,7 +15,15 @@ simulate_rates(
 }
 \arguments{
 \item{dns_params}{List. Model parameters from dnsr package, typically from
-\code{dnsr::get_calibrated_dns_params()}}
+\code{dnsr::get_calibrated_dns_params()}. Its \code{lambda} element is the
+Nelson-Siegel decay rate, in the same units as \code{maturities} -- that
+is, per year. Diebold and Li's conventional 0.0609 is per month, so the
+equivalent here is \code{0.0609 * 12 = 0.7308}. Passing the per-month
+value against a grid in years puts the curvature hump 29 years out,
+which leaves the slope and curvature loadings correlated -0.97 over a
+standard 3M-30Y grid; \code{simulate_rates()} warns when the loadings
+come out that close together. See \code{dnsr::ns_lambda()} to express a
+decay rate by the maturity at which the curvature loading peaks.}
 
 \item{n_paths}{Integer. Number of simulation paths}
 

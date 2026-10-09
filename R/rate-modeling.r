@@ -3,7 +3,15 @@
 #' for use in option-adjusted spread analysis.
 #'
 #' @param dns_params List. Model parameters from dnsr package, typically from
-#'   \code{dnsr::get_calibrated_dns_params()}
+#'   \code{dnsr::get_calibrated_dns_params()}. Its \code{lambda} element is the
+#'   Nelson-Siegel decay rate, in the same units as \code{maturities} -- that
+#'   is, per year. Diebold and Li's conventional 0.0609 is per month, so the
+#'   equivalent here is \code{0.0609 * 12 = 0.7308}. Passing the per-month
+#'   value against a grid in years puts the curvature hump 29 years out,
+#'   which leaves the slope and curvature loadings correlated -0.97 over a
+#'   standard 3M-30Y grid; \code{simulate_rates()} warns when the loadings
+#'   come out that close together. See \code{dnsr::ns_lambda()} to express a
+#'   decay rate by the maturity at which the curvature loading peaks.
 #' @param n_paths Integer. Number of simulation paths
 #' @param n_periods Integer. Number of time periods (typically months)
 #' @param maturities Numeric vector. Maturities (in years) for which to calculate yields
@@ -83,12 +91,40 @@ simulate_rates <- function(dns_params, n_paths = 100, n_periods = 360,
     initial_factors <- dns_params$initial_factors
   }
 
-  # FIX: Handle lambda similarly
+  # Handle lambda similarly. The default is per year, as `maturities` is:
+  # it places the curvature hump at 3.5 years, matching dnsr's own default.
   if (!("lambda" %in% names(dns_params))) {
-    lambda <- 0.0609  # Default value
-    warning("lambda not found in dns_params. Using default value: ", lambda)
+    lambda <- dnsr::ns_lambda(3.5)
+    warning("lambda not found in dns_params. Using default value: ",
+            signif(lambda, 4), " per year (curvature hump at 3.5 years).")
   } else {
     lambda <- dns_params$lambda
+  }
+  checkmate::assert_number(lambda, lower = .Machine$double.eps, finite = TRUE)
+
+  # Check that lambda resolves the slope and curvature loadings apart over the
+  # grid being asked for. When those two loadings are nearly collinear the
+  # factors contribute almost the same shape, so the yields depend on a
+  # difference the loadings cannot express. The usual cause is a lambda given
+  # in the wrong units -- a per-month value against a grid in years, or the
+  # reverse -- which no range check on lambda itself would catch, since the
+  # two conventions differ only by a factor of 12 and both land in the
+  # plausible interval. Testing the loadings instead is free of any
+  # assumption about units, and catches a genuinely narrow maturity grid too.
+  if (length(maturities) >= 3) {
+    slope_load <- (1 - exp(-lambda * maturities)) / (lambda * maturities)
+    curve_load <- slope_load - exp(-lambda * maturities)
+    collinearity <- suppressWarnings(stats::cor(slope_load, curve_load))
+    if (is.finite(collinearity) && abs(collinearity) > 0.95) {
+      warning("The Nelson-Siegel slope and curvature loadings correlate ",
+              signif(collinearity, 3), " at lambda = ", signif(lambda, 4),
+              " over the maturities requested, so the two factors are not ",
+              "separately resolved and the simulated yields will reflect ",
+              "that. lambda must be in the same units as `maturities`, ",
+              "which are years: Diebold and Li's per-month 0.0609 is ",
+              "0.7308 per year, and its curvature hump sits at ",
+              signif(dnsr::ns_curvature_peak(lambda), 4), " here.")
+    }
   }
 
   # Add names element to params if missing

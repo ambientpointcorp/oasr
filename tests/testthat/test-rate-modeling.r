@@ -8,10 +8,11 @@ setup_dns_params <- function() {
       theta = c(0.04, -0.02, 0.01),  # Long-run means
       sigma = c(0.005, 0.01, 0.02),  # Volatilities
       names = c("Level", "Slope", "Curvature"),
-      lambda = 0.0609
+      lambda = 0.7308
     ),
     initial_factors = c(0.035, -0.015, 0.005),
-    lambda = 0.0609
+    # Per year, as `maturities` is: Diebold and Li's per-month 0.0609 * 12
+    lambda = 0.7308
   )
 }
 
