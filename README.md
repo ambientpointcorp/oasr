@@ -1,5 +1,17 @@
 # oasr: Option-Adjusted Spread Analysis in R
 
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/ambientpointcorp/oasr/actions/workflows/R-CMD-check.yaml/badge.svg?branch=main)](https://github.com/ambientpointcorp/oasr/actions/workflows/R-CMD-check.yaml)
+[![parallel-paths](https://github.com/ambientpointcorp/oasr/actions/workflows/parallel-paths.yaml/badge.svg?branch=main)](https://github.com/ambientpointcorp/oasr/actions/workflows/parallel-paths.yaml)
+<!-- badges: end -->
+
+Reference documentation: <https://ambientpointcorp.github.io/oasr>
+
+The second badge is the Windows socket-cluster check: the parallel branches in
+`calculate_credit_vectors()` and `project_cashflows()` are only reached off
+Unix, so no run on a developer machine touches them. It asserts they agree
+with the sequential path.
+
 ## Overview
 
 `oasr` is a comprehensive R package for performing option-adjusted spread (OAS) analysis on fixed income securities, particularly focusing on asset-backed securities (ABS) and mortgage-backed securities (MBS). The package leverages the `dnsr` package for interest rate modeling and yield curve simulation.
