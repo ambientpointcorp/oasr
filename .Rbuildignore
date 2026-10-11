@@ -12,3 +12,4 @@
 ^tools$
 ^\.positai$
 ^\.claude$
+^_pkgdown\.yml$

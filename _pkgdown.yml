@@ -1,0 +1,83 @@
+url: https://ambientpointcorp.github.io/oasr
+
+template:
+  bootstrap: 5
+
+reference:
+  - title: OAS analysis
+    desc: >
+      Solve for the spread that reprices a security, and read the quantities
+      derived from it.
+    contents:
+      - calculate_oas
+      - binary_search_oas
+      - calculate_z_spread
+      - calculate_option_cost
+      - run_oas_sensitivity
+      - create_oas_surface
+
+  - title: Prepayment and credit
+    desc: Specify how a pool pays down early and how it defaults.
+    contents:
+      - prepayment_model
+      - psa_prepayment_model
+      - survival_prepayment_model
+      - custom_prepayment_model
+      - calculate_credit_vectors
+
+  - title: Rate paths
+    desc: Draw the scenarios a security is priced across, and discount along them.
+    contents:
+      - simulate_rates
+      - extract_reference_rates
+      - get_discount_factors
+
+  - title: Cash flow projection
+    desc: Project a pool's cash flows under given rate and prepayment assumptions.
+    contents:
+      - project_cashflows
+      - project_cashflows_with_io
+      - cashflow_components
+      - aggregate_cashflows
+
+  - title: Valuation and risk
+    contents:
+      - calculate_present_value
+      - calculate_price
+      - calculate_average_life
+      - calculate_duration_convexity
+
+  - title: Reporting
+    contents:
+      - create_oas_report
+
+  - title: Data
+    contents:
+      - sample_abs_data
+      - sample_deal_structure
+
+  - title: Visualization
+    contents:
+      - plot_cashflows
+      - plot_prepayment_rates
+      - plot_rate_paths
+      - plot_yield_curves
+      - plot_yield_surface
+
+  - title: Methods
+    desc: >
+      `print()`, `summary()` and `plot()` for the objects the analysis
+      functions return.
+    contents:
+      - print.oas_result
+      - summary.oas_result
+      - plot.oas_result
+      - print.oas_sensitivity
+      - plot.oas_sensitivity
+      - plot.oas_surface
+
+articles:
+  - title: Guides
+    navbar: ~
+    contents:
+      - introduction-to-oasr
