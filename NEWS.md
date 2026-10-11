@@ -163,3 +163,9 @@ previous release bit for bit.
   default token resolves it, so neither workflow carries the personal-token
   fallback any longer. The README drops the `GITHUB_PAT` step it asked of
   readers for the same reason.
+* The package has a pkgdown site, at
+  <https://ambientpointcorp.github.io/oasr>. There was no `_pkgdown.yml` and no
+  workflow to render one, so the reference index fell back to whatever order
+  pkgdown guessed and the vignette was reachable only by building it locally.
+  The index now groups the 36 exported topics by what they do, and `URL:` and
+  `BugReports:` are declared in `DESCRIPTION`, which had neither.
