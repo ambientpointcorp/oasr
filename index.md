@@ -1,0 +1,248 @@
+# oasr: Option-Adjusted Spread Analysis in R
+
+## Overview
+
+`oasr` is a comprehensive R package for performing option-adjusted
+spread (OAS) analysis on fixed income securities, particularly focusing
+on asset-backed securities (ABS) and mortgage-backed securities (MBS).
+The package leverages the `dnsr` package for interest rate modeling and
+yield curve simulation.
+
+## Features
+
+- **Flexible OAS Analysis**: Calculate option-adjusted spreads for fixed
+  income securities with embedded options
+- **Multiple Prepayment Models**: Support for CPR, CDR, and
+  time-to-event survival models
+- **Default Modeling**: Incorporate credit risk with default rates and
+  loss recovery assumptions
+- **Cash Flow Projection**: Project cash flows under various interest
+  rate scenarios
+- **Sensitivity Analysis**: Analyze OAS sensitivity to changes in market
+  factors
+- **Visualization**: Specialized plotting functions for OAS analysis
+  results
+
+## Installation
+
+Neither `oasr` nor its `dnsr` dependency is on CRAN. `oasr` declares
+`dnsr` in `Remotes:`, so a single install resolves both:
+
+``` r
+
+# install.packages("remotes")
+remotes::install_github("ambientpointcorp/oasr")
+```
+
+## Usage
+
+### Basic Example
+
+``` r
+
+library(oasr)
+
+# Load sample data
+data(sample_abs_data)
+
+# Calibrate DNS model from market data
+dns_params <- dnsr::get_calibrated_dns_params()
+
+# Simulate interest rate paths
+rate_paths <- simulate_rates(dns_params, n_paths = 100, n_periods = 360)
+
+# Define prepayment assumptions
+prepay_model <- prepayment_model(
+  type = "cpr_cdr",
+  base_cpr = 0.06,
+  base_cdr = 0.01,
+  recovery_rate = 0.65
+)
+
+# Calculate OAS
+oas_result <- calculate_oas(
+  asset_data = sample_abs_data,
+  rate_paths = rate_paths,
+  prepay_model = prepay_model,
+  market_price = 101.5
+)
+
+# Analyze results
+summary(oas_result)
+
+# Create plots
+plot(oas_result, type = "cashflows")
+plot(oas_result, type = "prepayments")
+plot(oas_result, type = "rates")
+
+# Run sensitivity analysis
+sensitivity <- run_oas_sensitivity(oas_result)
+plot(sensitivity)
+```
+
+### Structured Securities Example
+
+``` r
+
+library(oasr)
+
+# Load sample data
+data(sample_abs_data)
+data(sample_deal_structure)
+
+# Simulate interest rate paths
+dns_params <- dnsr::get_calibrated_dns_params()
+rate_paths <- simulate_rates(dns_params, n_paths = 100)
+
+# Define prepayment model
+prepay_model <- prepayment_model(
+  type = "cpr_cdr",
+  base_cpr = 0.06,
+  base_cdr = 0.01,
+  recovery_rate = 0.65
+)
+
+# Calculate OAS for structured security
+oas_result <- calculate_oas(
+  asset_data = sample_abs_data,
+  rate_paths = rate_paths,
+  prepay_model = prepay_model,
+  market_price = 101.0,
+  deal_structure = sample_deal_structure
+)
+
+# Generate report
+report_file <- create_oas_report(oas_result, output_format = "html")
+```
+
+## Prepayment Model Types
+
+The package supports multiple prepayment model types:
+
+1.  **cpr_cdr**: Standard CPR/CDR model with refinancing incentives
+2.  **psa**: Public Securities Association standard prepayment model
+3.  **survival**: Time-to-event survival models for prepayment and
+    default
+4.  **custom**: User-defined custom prepayment functions
+
+## Integration with dnsr
+
+The package relies on the `dnsr` package for interest rate modeling:
+
+``` r
+
+library(oasr)
+
+# Get Treasury yield data
+yield_data <- dnsr::get_treasury_yield_combined("2020-01-01")
+
+# Fit DNS model
+dns_result <- dnsr::fit_dns_model(yield_data, n_days = 100)
+
+# Estimate DNS dynamics
+dynamics <- dnsr::estimate_dns_dynamics(dns_result$parameters)
+
+# Convert to simulation parameters
+sim_params <- dnsr::dns_dynamics_to_sim_params(dynamics)
+
+# Simulate rate paths using oasr interface
+rate_paths <- simulate_rates(sim_params, n_paths = 100)
+```
+
+## Main Functions
+
+| Area | Functions |
+|:---|:---|
+| Rate paths | [`simulate_rates()`](https://ambientpointcorp.github.io/oasr/reference/simulate_rates.md), [`extract_reference_rates()`](https://ambientpointcorp.github.io/oasr/reference/extract_reference_rates.md), [`get_discount_factors()`](https://ambientpointcorp.github.io/oasr/reference/get_discount_factors.md) |
+| Prepayment and credit | [`prepayment_model()`](https://ambientpointcorp.github.io/oasr/reference/prepayment_model.md), [`psa_prepayment_model()`](https://ambientpointcorp.github.io/oasr/reference/psa_prepayment_model.md), [`survival_prepayment_model()`](https://ambientpointcorp.github.io/oasr/reference/survival_prepayment_model.md), [`custom_prepayment_model()`](https://ambientpointcorp.github.io/oasr/reference/custom_prepayment_model.md), [`calculate_credit_vectors()`](https://ambientpointcorp.github.io/oasr/reference/calculate_credit_vectors.md) |
+| Cashflows | [`project_cashflows()`](https://ambientpointcorp.github.io/oasr/reference/project_cashflows.md), [`project_cashflows_with_io()`](https://ambientpointcorp.github.io/oasr/reference/project_cashflows_with_io.md), [`aggregate_cashflows()`](https://ambientpointcorp.github.io/oasr/reference/aggregate_cashflows.md) |
+| Valuation | [`calculate_present_value()`](https://ambientpointcorp.github.io/oasr/reference/calculate_present_value.md), [`calculate_price()`](https://ambientpointcorp.github.io/oasr/reference/calculate_price.md), [`calculate_average_life()`](https://ambientpointcorp.github.io/oasr/reference/calculate_average_life.md), [`cashflow_components()`](https://ambientpointcorp.github.io/oasr/reference/cashflow_components.md) |
+| Spreads | [`calculate_oas()`](https://ambientpointcorp.github.io/oasr/reference/calculate_oas.md), [`binary_search_oas()`](https://ambientpointcorp.github.io/oasr/reference/binary_search_oas.md), [`calculate_z_spread()`](https://ambientpointcorp.github.io/oasr/reference/calculate_z_spread.md), [`calculate_option_cost()`](https://ambientpointcorp.github.io/oasr/reference/calculate_option_cost.md) |
+| Risk | [`calculate_duration_convexity()`](https://ambientpointcorp.github.io/oasr/reference/calculate_duration_convexity.md), [`run_oas_sensitivity()`](https://ambientpointcorp.github.io/oasr/reference/run_oas_sensitivity.md), [`create_oas_surface()`](https://ambientpointcorp.github.io/oasr/reference/create_oas_surface.md) |
+| Output | [`create_oas_report()`](https://ambientpointcorp.github.io/oasr/reference/create_oas_report.md), [`plot_cashflows()`](https://ambientpointcorp.github.io/oasr/reference/plot_cashflows.md), [`plot_prepayment_rates()`](https://ambientpointcorp.github.io/oasr/reference/plot_prepayment_rates.md), [`plot_rate_paths()`](https://ambientpointcorp.github.io/oasr/reference/plot_rate_paths.md), [`plot_yield_curves()`](https://ambientpointcorp.github.io/oasr/reference/plot_yield_curves.md), [`plot_yield_surface()`](https://ambientpointcorp.github.io/oasr/reference/plot_yield_surface.md) |
+
+`oas_result`, `oas_sensitivity`, and `oas_surface` objects carry
+[`print()`](https://rdrr.io/r/base/print.html),
+[`plot()`](https://rdrr.io/r/graphics/plot.default.html), and (for
+`oas_result`) [`summary()`](https://rdrr.io/r/base/summary.html)
+methods.
+
+### A note on attaching `dnsr`
+
+`dnsr` exports
+[`plot_yield_curves()`](https://ambientpointcorp.github.io/oasr/reference/plot_yield_curves.md)
+and
+[`plot_yield_surface()`](https://ambientpointcorp.github.io/oasr/reference/plot_yield_surface.md)
+of its own, and so does `oasr`. Attaching both with
+[`library()`](https://rdrr.io/r/base/library.html) means whichever is
+attached second wins, silently, and the two take different arguments:
+
+``` r
+
+library(oasr)
+library(dnsr)
+plot_yield_curves(rate_paths, time_points = c(0, 1, 5))
+#> Error: unused arguments (time_points = c(0, 1, 5))
+```
+
+Reach for `dnsr` through `dnsr::` rather than attaching it, or qualify
+the plotting calls as
+[`oasr::plot_yield_curves()`](https://ambientpointcorp.github.io/oasr/reference/plot_yield_curves.md).
+Everything else in the two packages has distinct names.
+
+## Conventions
+
+Several modelling conventions are settable rather than fixed. Each
+defaults to the behaviour that is correct rather than the behaviour that
+is oldest, and the earlier behaviour stays reachable:
+
+| Argument | Default | Alternative |
+|:---|:---|:---|
+| `accrual_method` | `"30/360"` | `"ACT/365"`, `"ACT/360"`, with a `start_date` or per-loan `accrual_start_date` anchor. A per-loan `accrual_method` or `Accrual` column takes precedence over the argument |
+| `terminal_balance` | `"return"` | `"drop"`, discarding the balance outstanding at the horizon |
+| `on_short_horizon` | `"warn"` | `"silent"`, `"error"` |
+| `recovery_basis` | `"defaults"` | `"balance"`, taking recovery on the whole balance rather than the amount that defaulted |
+| `discounting` | `"path"` | `"spot"`, discounting each cash flow at the reference yield in its own period |
+| `reproject` | `NULL` | a projection function, making [`calculate_duration_convexity()`](https://ambientpointcorp.github.io/oasr/reference/calculate_duration_convexity.md) a true effective duration |
+| `include_t0` | `TRUE` | `FALSE`, returning exactly `n_periods` columns from [`simulate_rates()`](https://ambientpointcorp.github.io/oasr/reference/simulate_rates.md) |
+
+[`calculate_oas()`](https://ambientpointcorp.github.io/oasr/reference/calculate_oas.md)
+records the conventions it ran under in `result$options`, and
+[`run_oas_sensitivity()`](https://ambientpointcorp.github.io/oasr/reference/run_oas_sensitivity.md)
+and
+[`create_oas_surface()`](https://ambientpointcorp.github.io/oasr/reference/create_oas_surface.md)
+re-solve on them.
+
+Note that `duration` is the signed logarithmic derivative `(1/P) dP/dy`,
+not the negated fixed-income reading, so it is negative for an
+instrument whose price falls as yields rise. The signed form stays
+correct for instruments whose price rises with yield; negate it for the
+conventional presentation.
+
+## Citation
+
+If you use `oasr` in your research, please cite:
+
+    @Manual{,
+      title = {oasr: Option-Adjusted Spread Analysis for Fixed Income Securities},
+      author = {Ariel R. H.},
+      year = {2025},
+      note = {R package version 0.1.0},
+      url = {https://github.com/ambientpointcorp/oasr},
+    }
+
+## Related
+
+- [`dnsr`](https://github.com/ambientpointcorp/dnsr) — the Dynamic
+  Nelson-Siegel term structure model this package builds its rate paths
+  on.
+- *Monte Carlo Fair Value Analysis for Loan Pools* — develops the
+  cashflow projection, Monte Carlo valuation, and OAS methodology this
+  package implements. Its worked examples run on `oasr`; the chapter
+  code is at
+  [mc-fair-value-book](https://github.com/ambientpointcorp/mc-fair-value-book).
+
+## License
+
+MIT © Ambient Point Corp. `LICENSE` holds the two-field stub R expects;
+the full text is in `LICENSE.md`.
