@@ -201,7 +201,7 @@ summary(oas_result)
 #> 
 #> 
 #> $execution_time
-#> Time difference of 0.1187124 secs
+#> Time difference of 0.1174974 secs
 #> 
 #> $asset_info
 #>    Asset  Balance    WAC WAL.by_asset WAL.overall_wal  Duration Convexity
@@ -399,7 +399,7 @@ print(structured_oas)
 #> Effective Convexity: 45.27 
 #> Convergence: Yes 
 #> Iterations: 12 
-#> Execution Time: 0.19 seconds
+#> Execution Time: 0.18 seconds
 ```
 
 ## Conclusion
