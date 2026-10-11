@@ -156,3 +156,10 @@ previous release bit for bit.
 * `calculate_duration_convexity()` documents its sign convention: it returns
   the signed logarithmic derivative `(1/P) dP/dy`, not the negated
   fixed-income reading.
+* The `R-CMD-check` and `parallel-paths` workflows run on push and pull request
+  again. Both had been manual-only: `dnsr` was private, the default token is
+  scoped to this repository alone, and so an automatic run failed at the
+  dependency gate before reaching a single check. `dnsr` is public now and the
+  default token resolves it, so neither workflow carries the personal-token
+  fallback any longer. The README drops the `GITHUB_PAT` step it asked of
+  readers for the same reason.

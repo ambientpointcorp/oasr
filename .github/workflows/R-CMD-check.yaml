@@ -1,18 +1,11 @@
 name: R-CMD-check
 
 on:
-  # Manual only while dnsr is private. The default token is scoped to this
-  # repository and cannot resolve the dependency, so an automatic run would
-  # fail before reaching any check -- a red badge that says nothing about the
-  # code. A manual run still needs a DNSR_PAT secret with read access to dnsr.
-  #
-  # When dnsr is published: delete the DNSR_PAT secret if it exists, and
-  # uncomment the two triggers below. Nothing else needs to change.
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
-  # push:
-  #   branches: [main]
-  # pull_request:
-  #   branches: [main]
 
 jobs:
   R-CMD-check:
@@ -32,11 +25,7 @@ jobs:
           - {os: ubuntu-latest,  r: 'oldrel-1'}
 
     env:
-      # dnsr is a private repository for now, and the default token is scoped
-      # to this one, so it cannot resolve the dependency. DNSR_PAT is a
-      # personal access token with read access to it. Once dnsr is public the
-      # secret can be deleted and the fallback below takes over unchanged.
-      GITHUB_PAT: ${{ secrets.DNSR_PAT || secrets.GITHUB_TOKEN }}
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
       NOT_CRAN: true
 
