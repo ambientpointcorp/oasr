@@ -216,8 +216,11 @@
   default_history <- if (track_defaults) numeric(n_periods) else NULL
   last_t <- 0L
 
-  horizon <- min(n_periods, remaining_term)
-  for (t in 1:horizon) {
+  # A loan already at or past its amortisation term has no remaining horizon;
+  # seq_len over a clamped count returns no periods, where 1:horizon would have
+  # counted down through zero and indexed the rate arrays out of range.
+  horizon <- max(0, min(n_periods, remaining_term))
+  for (t in seq_len(horizon)) {
     if (remaining_balance <= 0.01) {
       break
     }
@@ -307,6 +310,37 @@
   cf_matrix
 }
 
+#' @title Raise the First Worker Error From a Parallel Projection (Internal)
+#' @description Both parallel backends return a worker's error in band rather
+#'   than raising it, and the per-task result is written into a slice of the
+#'   cash flow array. A condition object recycles across that slice and turns
+#'   it to character, so an unchecked error becomes a corrupt projection and a
+#'   bare "all scheduled cores encountered errors in user code" warning. Raise
+#'   the first one instead, naming the path and asset it came from.
+#' @keywords internal
+#' @noRd
+.stop_on_task_error <- function(results, task_indices) {
+  failed <- which(vapply(results, function(r) {
+    inherits(r, "try-error") || inherits(r, "error") || inherits(r, "condition")
+  }, logical(1)))
+  if (length(failed) == 0L) return(invisible(NULL))
+
+  k <- failed[1L]
+  cond <- attr(results[[k]], "condition")
+  msg <- if (inherits(cond, "condition")) {
+    conditionMessage(cond)
+  } else if (inherits(results[[k]], "condition")) {
+    conditionMessage(results[[k]])
+  } else {
+    trimws(as.character(results[[k]]))
+  }
+  stop(sprintf(
+    "Cash flow projection failed for %d of %d path-asset tasks. First failure (path %d, asset %d): %s",
+    length(failed), length(results),
+    task_indices$path_idx[k], task_indices$asset_idx[k], msg
+  ), call. = FALSE)
+}
+
 #' @title Run the Projection Over Every Path and Asset (Internal)
 #' @keywords internal
 #' @noRd
@@ -353,6 +387,7 @@
       results <- parallel::mclapply(seq_len(n_tasks), function(k) {
         one(task_indices$path_idx[k], task_indices$asset_idx[k])
       }, mc.cores = n_cores)
+      .stop_on_task_error(results, task_indices)
     } else {
       # Sent to the workers by value with a base environment, so the socket
       # cluster needs neither the package namespace nor a ::: call to reach it.
@@ -379,6 +414,7 @@
           recovery_basis, recovery_rate, recovery_lag
         )
       })
+      .stop_on_task_error(results, task_indices)
     }
 
     for (k in seq_len(n_tasks)) {
