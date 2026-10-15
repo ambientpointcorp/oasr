@@ -233,3 +233,54 @@ test_that("calculate_average_life works correctly", {
   expect_equal(length(bond_wal$avg_lives$by_asset), n_bonds)
   expect_equal(dim(bond_wal$avg_lives_by_path), c(n_paths, n_bonds))
 })
+
+test_that("a loan at or past its amortisation term projects nothing instead of erroring", {
+  test_data <- setup_test_data()
+  asset_data <- test_data$asset_data
+  asset_data$age <- asset_data$term + c(0, 40)  # one exactly at term, one past it
+
+  cashflows <- project_cashflows(asset_data, test_data$credit_vectors)
+
+  # Every slice stays numeric and empty: a past-term loan contributes no flows.
+  for (i in seq_along(cashflows)) {
+    expect_type(cashflows[[i]], "double")
+    expect_true(all(cashflows[[i]] == 0))
+  }
+})
+
+test_that("a worker error in the parallel grid is raised with its own message", {
+  skip_on_os("windows")  # the fork backend is what returns errors in band
+  test_data <- setup_test_data()
+  asset_data <- test_data$asset_data
+
+  # An NA reset counter errors inside the per-asset projection. mclapply hands
+  # that back as a value, so without a check it would recycle into the cash
+  # flow array and turn it to character rather than stopping.
+  asset_data$is_variable_rate <- TRUE
+  asset_data$rate_margin <- 0.02
+  asset_data$reset_frequency <- 12
+  asset_data$next_reset <- NA_real_
+
+  n_paths <- dim(test_data$credit_vectors$prepay_rates)[1]
+  n_periods <- dim(test_data$credit_vectors$prepay_rates)[2]
+  reference_rates <- matrix(0.04, nrow = n_paths, ncol = n_periods)
+
+  expect_error(
+    suppressWarnings(project_cashflows(
+      asset_data, test_data$credit_vectors,
+      reference_rates = reference_rates, parallel = TRUE, n_cores = 2
+    )),
+    "missing value where TRUE/FALSE needed"
+  )
+})
+
+test_that("the parallel grid returns what the serial grid returns", {
+  skip_on_os("windows")
+  test_data <- setup_test_data()
+
+  serial <- project_cashflows(test_data$asset_data, test_data$credit_vectors)
+  parallelised <- project_cashflows(test_data$asset_data, test_data$credit_vectors,
+                                    parallel = TRUE, n_cores = 2)
+
+  expect_equal(parallelised, serial)
+})
