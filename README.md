@@ -214,7 +214,7 @@ If you use `oasr` in your research, please cite:
   title = {oasr: Option-Adjusted Spread Analysis for Fixed Income Securities},
   author = {Ariel R. H.},
   year = {2025},
-  note = {R package version 0.1.0},
+  note = {R package version 0.1.0.9000},
   url = {https://github.com/ambientpointcorp/oasr},
 }
 ```
