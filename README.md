@@ -207,12 +207,14 @@ price rises with yield; negate it for the conventional presentation.
 
 ## Citation
 
-If you use `oasr` in your research, please cite:
+If you use `oasr` in your research, please cite it. The entry below is what
+`citation("oasr")` prints; running it reports the version you actually have
+installed, which is the one worth recording.
 
 ```
 @Manual{,
   title = {oasr: Option-Adjusted Spread Analysis for Fixed Income Securities},
-  author = {Ariel R. H.},
+  author = {Ariel {R. H.}},
   year = {2025},
   note = {R package version 0.1.0.9000},
   url = {https://github.com/ambientpointcorp/oasr},
