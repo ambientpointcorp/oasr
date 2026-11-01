@@ -228,7 +228,7 @@ installed, which is the one worth recording.
 - *Monte Carlo Fair Value Analysis for Loan Pools* — develops the cashflow
   projection, Monte Carlo valuation, and OAS methodology this package
   implements. Its worked examples run on `oasr`; the chapter code is at
-  [mc-fair-value-book](https://github.com/ambientpointcorp/mc-fair-value-book).
+  [mc-fair-value-examples](https://github.com/ambientpointcorp/mc-fair-value-examples).
 
 ## License
 
